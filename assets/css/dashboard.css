@@ -1,0 +1,274 @@
+/*====================================================
+ R&R COLLECTION POS
+ Dashboard Style v2.0
+=====================================================*/
+
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+    font-family:"Segoe UI",sans-serif;
+}
+
+body{
+    background:#F4F7FC;
+    color:#1F2937;
+}
+
+/* Main Content */
+
+.main{
+    margin-left:260px;
+    min-height:100vh;
+}
+
+/* Top Header */
+
+.topbar{
+
+    height:70px;
+
+    background:#fff;
+
+    display:flex;
+
+    justify-content:space-between;
+
+    align-items:center;
+
+    padding:0 30px;
+
+    box-shadow:0 3px 12px rgba(0,0,0,.08);
+
+    position:sticky;
+
+    top:0;
+
+    z-index:999;
+
+}
+
+.topbar h2{
+
+    color:#2563EB;
+
+}
+
+.user-info{
+
+    display:flex;
+
+    align-items:center;
+
+    gap:15px;
+
+}
+
+.avatar{
+
+    width:45px;
+
+    height:45px;
+
+    background:#2563EB;
+
+    color:#fff;
+
+    border-radius:50%;
+
+    display:flex;
+
+    justify-content:center;
+
+    align-items:center;
+
+    font-weight:bold;
+
+    font-size:18px;
+
+}
+
+/* Dashboard */
+
+.container{
+
+    padding:30px;
+
+}
+
+.page-title{
+
+    margin-bottom:25px;
+
+}
+
+.page-title h1{
+
+    font-size:32px;
+
+    color:#1F2937;
+
+}
+
+.page-title p{
+
+    color:#6B7280;
+
+}
+
+/* Cards */
+
+.cards{
+
+    display:grid;
+
+    grid-template-columns:repeat(auto-fit,minmax(240px,1fr));
+
+    gap:20px;
+
+    margin-bottom:30px;
+
+}
+
+.card{
+
+    background:#fff;
+
+    border-radius:15px;
+
+    padding:25px;
+
+    display:flex;
+
+    align-items:center;
+
+    justify-content:space-between;
+
+    box-shadow:0 8px 18px rgba(0,0,0,.06);
+
+    transition:.3s;
+
+}
+
+.card:hover{
+
+    transform:translateY(-6px);
+
+}
+
+.card-icon{
+
+    width:70px;
+
+    height:70px;
+
+    border-radius:15px;
+
+    display:flex;
+
+    justify-content:center;
+
+    align-items:center;
+
+    color:#fff;
+
+    font-size:28px;
+
+}
+
+.blue{background:#2563EB;}
+.green{background:#16A34A;}
+.orange{background:#EA580C;}
+.red{background:#DC2626;}
+
+.card h2{
+
+    margin-top:8px;
+
+    font-size:30px;
+
+}
+
+.card small{
+
+    color:#6B7280;
+
+}
+
+/* Tables */
+
+.panel{
+
+    background:#fff;
+
+    border-radius:15px;
+
+    padding:25px;
+
+    box-shadow:0 8px 18px rgba(0,0,0,.06);
+
+}
+
+.panel h3{
+
+    margin-bottom:20px;
+
+}
+
+table{
+
+    width:100%;
+
+    border-collapse:collapse;
+
+}
+
+table th{
+
+    background:#2563EB;
+
+    color:white;
+
+    padding:15px;
+
+    text-align:left;
+
+}
+
+table td{
+
+    padding:15px;
+
+    border-bottom:1px solid #E5E7EB;
+
+}
+
+table tr:hover{
+
+    background:#F9FAFB;
+
+}
+
+/* Buttons */
+
+.btn{
+
+    background:#2563EB;
+
+    color:white;
+
+    text-decoration:none;
+
+    padding:10px 18px;
+
+    border-radius:8px;
+
+    display:inline-block;
+
+}
+
+.btn:hover{
+
+    background:#1D4ED8;
+
+}

@@ -1,0 +1,257 @@
+/* =====================================================
+   CUSTOMER FORM PANEL
+=====================================================*/
+
+.customer-panel{
+
+    background:#ffffff;
+    border-radius:18px;
+    padding:30px;
+    box-shadow:0 10px 30px rgba(0,0,0,0.08);
+    border:1px solid #eeeeee;
+    margin-bottom:25px;
+
+}
+
+
+/* =====================================================
+   FORM LAYOUT
+=====================================================*/
+
+.customer-panel form{
+
+    width:100%;
+
+}
+
+
+.customer-row{
+
+    display:flex;
+    gap:25px;
+    margin-bottom:5px;
+
+}
+
+
+.customer-row .form-group{
+
+    flex:1;
+
+}
+
+
+.form-group{
+
+    display:flex;
+    flex-direction:column;
+    margin-bottom:18px;
+
+}
+
+
+.form-group label{
+
+    font-size:14px;
+    font-weight:600;
+    color:#34495e;
+    margin-bottom:7px;
+
+}
+
+
+.required{
+
+    color:#e74c3c;
+
+}
+
+
+/* =====================================================
+   INPUTS
+=====================================================*/
+
+
+.form-group input,
+.form-group select,
+.form-group textarea{
+
+    width:100%;
+    height:45px;
+    padding:10px 14px;
+
+    border:1px solid #dcdcdc;
+    border-radius:10px;
+
+    background:#f8f9fa;
+    color:#333;
+
+    font-size:15px;
+
+    transition:all .3s ease;
+
+    box-sizing:border-box;
+
+}
+
+
+.form-group textarea{
+
+    height:auto;
+    min-height:120px;
+    resize:vertical;
+
+}
+
+
+
+.form-group input:hover,
+.form-group select:hover,
+.form-group textarea:hover{
+
+    border-color:#b8c7d9;
+
+}
+
+
+
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus{
+
+    outline:none;
+
+    background:#fff;
+
+    border-color:#0d6efd;
+
+    box-shadow:
+    0 0 0 3px rgba(13,110,253,.12);
+
+}
+
+
+/* =====================================================
+   BUTTON SECTION
+=====================================================*/
+
+
+.customer-buttons{
+
+    display:flex;
+    gap:15px;
+    margin-top:30px;
+
+}
+
+
+
+.customer-btn{
+
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+
+    padding:12px 28px;
+
+    border-radius:10px;
+
+    font-size:15px;
+    font-weight:600;
+
+    color:white;
+    text-decoration:none;
+
+    border:none;
+    cursor:pointer;
+
+    transition:.3s ease;
+
+}
+
+
+
+/* SAVE BUTTON */
+
+.customer-save{
+
+    background:#198754;
+
+}
+
+
+.customer-save:hover{
+
+    background:#157347;
+    transform:translateY(-2px);
+    box-shadow:0 5px 15px rgba(25,135,84,.25);
+
+}
+
+
+
+/* BACK BUTTON */
+
+.customer-back{
+
+    background:#0d6efd;
+
+}
+
+
+
+.customer-back:hover{
+
+    background:#0b5ed7;
+
+    transform:translateY(-2px);
+
+    box-shadow:0 5px 15px rgba(13,110,253,.25);
+
+}
+
+
+
+/* =====================================================
+   MOBILE RESPONSIVE
+=====================================================*/
+
+
+@media(max-width:768px){
+
+
+.customer-panel{
+
+    padding:20px;
+
+}
+
+
+.customer-row{
+
+    flex-direction:column;
+    gap:0;
+
+}
+
+
+
+.customer-buttons{
+
+    flex-direction:column;
+
+}
+
+
+
+.customer-btn{
+
+    width:100%;
+
+}
+
+
+}
+.customer-panel{
+    background:red !important;
+}
