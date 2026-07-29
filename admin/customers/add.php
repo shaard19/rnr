@@ -94,7 +94,7 @@ if (isset($_POST['save'])) {
 
 <link rel="stylesheet" href="../../assets/css/dashboard.css">
 <link rel="stylesheet" href="../../assets/css/sidebar.css">
-<link rel="stylesheet" href="../../assets/css/forms.css?v=2">
+<link rel="stylesheet" href="../../assets/css/form.css?v=2">
 
 
 <link rel="stylesheet"

@@ -151,7 +151,7 @@ Edit
 <a
 href="delete.php?id=<?= $row['id']; ?>"
 class="action delete"
-onclick="return confirm('Delete this customer?');">
+onclick="return confirm('Are you sure you want to remove this customer?');">
 
 <i class="fas fa-trash"></i>
 

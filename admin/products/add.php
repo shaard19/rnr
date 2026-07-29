@@ -1,97 +1,223 @@
 <?php
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
-ini_set('display_startup_errors', 1);
+
 require_once "../../config/session.php";
 require_once "../../config/database.php";
 require_once "../../config/permissions.php";
+require_once "../../config/product_code.php";
 
 if (!hasPermission('add_product')) {
     die("Access Denied");
 }
 
-// Load Categories
+/*
+|--------------------------------------------------------------------------
+| LOAD CATEGORIES
+|--------------------------------------------------------------------------
+*/
+
 $categories = mysqli_query(
     $conn,
-    "SELECT id, category_name
-     FROM categories
-     WHERE status='Active'
-     ORDER BY category_name ASC"
+    "SELECT
+        c.id,
+        c.category_name,
+        d.department_name
+     FROM categories c
+     INNER JOIN departments d
+        ON d.id = c.department_id
+     WHERE c.status='Active'
+     ORDER BY d.department_name,c.category_name"
 );
 
-// Save Product
+if (!$categories) {
+    die("Category Error : " . mysqli_error($conn));
+}
+
+/*
+|--------------------------------------------------------------------------
+| LOAD SUPPLIERS
+|--------------------------------------------------------------------------
+*/
+
+$suppliers = mysqli_query(
+    $conn,
+    "SELECT
+        id,
+        supplier_name
+     FROM suppliers
+     ORDER BY supplier_name"
+);
+
+if (!$suppliers) {
+    die("Supplier Error : " . mysqli_error($conn));
+}
+
+/*
+|--------------------------------------------------------------------------
+| DEFAULT MESSAGE
+|--------------------------------------------------------------------------
+*/
+
+$message = "";
+$message_type = "";
+
+/*
+|--------------------------------------------------------------------------
+| SAVE PRODUCT
+|--------------------------------------------------------------------------
+*/
+
 if (isset($_POST['save'])) {
 
     $category_id    = (int)$_POST['category_id'];
-    $supplier_id    = !empty($_POST['supplier_id']) ? (int)$_POST['supplier_id'] : NULL;
+
+    $supplier_id    = !empty($_POST['supplier_id'])
+                        ? (int)$_POST['supplier_id']
+                        : NULL;
+
     $barcode        = trim($_POST['barcode']);
+
     $product_name   = trim($_POST['product_name']);
+
     $buying_price   = (float)$_POST['buying_price'];
+
     $selling_price  = (float)$_POST['selling_price'];
+
     $unit           = trim($_POST['unit']);
+
     $quantity       = (int)$_POST['quantity'];
+
     $reorder_level  = (int)$_POST['reorder_level'];
+
     $status         = $_POST['status'];
 
-    $sql = "INSERT INTO products
-            (
-                category_id,
-                supplier_id,
-                barcode,
-                product_name,
-                buying_price,
-                selling_price,
-                unit,
-                quantity,
-                reorder_level,
-                status
-            )
-            VALUES
-            (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+    if (empty($product_name)) {
 
-    $stmt = mysqli_prepare($conn, $sql);
+        $message = "Product Name is required.";
 
-    mysqli_stmt_bind_param(
-        $stmt,
-        "iissddsiss",
-        $category_id,
-        $supplier_id,
-        $barcode,
-        $product_name,
-        $buying_price,
-        $selling_price,
-        $unit,
-        $quantity,
-        $reorder_level,
-        $status
-    );
+        $message_type = "error";
 
-    mysqli_stmt_execute($stmt);
+    } elseif ($selling_price < $buying_price) {
 
-    header("Location: index.php");
-    exit();
+        $message = "Selling price cannot be less than buying price.";
+
+        $message_type = "error";
+
+    } else {
+
+        $uuid = generateUUID();
+
+        $product_code = generateProductCode(
+            $conn,
+            $category_id
+        );
+
+        if (!$product_code) {
+
+            die("Unable to generate Product Code.");
+
+        }
+
+        $sql = "
+        INSERT INTO products
+        (
+            uuid,
+            category_id,
+            supplier_id,
+            barcode,
+            product_code,
+            product_name,
+            buying_price,
+            selling_price,
+            unit,
+            quantity,
+            reorder_level,
+            status
+        )
+
+        VALUES
+        (
+            ?,?,?,?,?,?,?,?,?,?,?,?
+        )
+        ";
+
+        $stmt = mysqli_prepare($conn,$sql);
+
+        mysqli_stmt_bind_param(
+
+            $stmt,
+
+            "siissddsiiss",
+
+            $uuid,
+
+            $category_id,
+
+            $supplier_id,
+
+            $barcode,
+
+            $product_code,
+
+            $product_name,
+
+            $buying_price,
+
+            $selling_price,
+
+            $unit,
+
+            $quantity,
+
+            $reorder_level,
+
+            $status
+
+        );
+
+        if(mysqli_stmt_execute($stmt)){
+
+            header("Location:index.php");
+
+            exit();
+
+        }else{
+
+            $message = mysqli_error($conn);
+
+            $message_type = "error";
+
+        }
+
+    }
+
 }
-?>
 
+?>
 <!DOCTYPE html>
 <html lang="en">
 
 <head>
 
-<meta charset="UTF-8">
+    <meta charset="UTF-8">
 
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0">
 
-<title>Add Product | R&R Collection POS</title>
+    <title>Add Product | R&R Collection POS</title>
 
-<link rel="stylesheet" href="../../assets/css/dashboard.css">
-<link rel="stylesheet" href="../../assets/css/sidebar.css">
-<link rel="stylesheet" href="../../assets/css/forms.css">
-<link rel="stylesheet" href="../../assets/css/form.css">
+    <link rel="stylesheet"
+          href="../../assets/css/dashboard.css">
 
+    <link rel="stylesheet"
+          href="../../assets/css/sidebar.css">
 
-<link rel="stylesheet"
-href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
+    <link rel="stylesheet"
+          href="../../assets/css/form.css">
+
+    <link rel="stylesheet"
+          href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
 
 </head>
 
@@ -105,171 +231,280 @@ href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css"
 
 <div class="container">
 
-<div class="page-title">
+    <div class="page-title">
 
-<h1>Add Product</h1>
+        <h1>
 
-<p>Create a new product in inventory.</p>
+            <i class="fa-solid fa-box"></i>
 
-</div>
+            Add Product
 
-<div class="panel">
+        </h1>
 
-<form method="POST">
+        <p>Create a new inventory item.</p>
 
-<div class="form-group">
+    </div>
 
-<label>Category</label>
+    <?php if(!empty($message)): ?>
 
-<select name="category_id" required>
+        <div class="alert <?= $message_type; ?>">
 
-<option value="">-- Select Category --</option>
+            <?= htmlspecialchars($message); ?>
 
-<?php while ($category = mysqli_fetch_assoc($categories)) { ?>
+        </div>
 
-<option value="<?php echo $category['id']; ?>">
+    <?php endif; ?>
 
-<?php echo htmlspecialchars($category['category_name']); ?>
+    <div class="customer-panel">
 
-</option>
+        <form method="POST">
 
-<?php } ?>
+            <!-- =========================
+                 CATEGORY & SUPPLIER
+            ========================== -->
 
-</select>
+            <div class="customer-row">
 
-</div>
+                <div class="form-group">
 
-<div class="form-group">
+                    <label>
+                        Category
+                        <span style="color:red">*</span>
+                    </label>
 
-<label>Supplier (Optional)</label>
+                    <select
+                        name="category_id"
+                        required>
 
-<select name="supplier_id">
+                        <option value="">
+                            Select Category
+                        </option>
 
-<option value="">No Supplier</option>
+                        <?php while($cat=mysqli_fetch_assoc($categories)): ?>
 
-</select>
+                            <option
+                                value="<?= $cat['id']; ?>">
 
-</div>
+                                <?= htmlspecialchars($cat['department_name']); ?>
 
-<div class="form-group">
+                                -
 
-<label>Barcode</label>
+                                <?= htmlspecialchars($cat['category_name']); ?>
 
-<input
-type="text"
-name="barcode"
-required>
+                            </option>
 
-</div>
+                        <?php endwhile; ?>
 
-<div class="form-group">
+                    </select>
 
-<label>Product Name</label>
+                </div>
 
-<input
-type="text"
-name="product_name"
-required>
+                <div class="form-group">
 
-</div>
+                    <label>
 
-<div class="form-group">
+                        Supplier
 
-<label>Buying Price</label>
+                    </label>
 
-<input
-type="number"
-step="0.01"
-name="buying_price"
-required>
+                    <select name="supplier_id">
 
-</div>
+                        <option value="">
 
-<div class="form-group">
+                            No Supplier
 
-<label>Selling Price</label>
+                        </option>
 
-<input
-type="number"
-step="0.01"
-name="selling_price"
-required>
+                        <?php while($sup=mysqli_fetch_assoc($suppliers)): ?>
 
-</div>
+                            <option
+                                value="<?= $sup['id']; ?>">
 
-<div class="form-group">
+                                <?= htmlspecialchars($sup['supplier_name']); ?>
 
-<label>Unit</label>
+                            </option>
 
-<input
-type="text"
-name="unit"
-placeholder="Piece, Box, Packet"
-required>
+                        <?php endwhile; ?>
 
-</div>
+                    </select>
 
-<div class="form-group">
+                </div>
 
-<label>Opening Stock</label>
+            </div>
+             <!-- =========================
+                 BARCODE & PRODUCT NAME
+            ========================== -->
 
-<input
-type="number"
-name="quantity"
-required>
+            <div class="customer-row">
 
-</div>
+                <div class="form-group">
 
-<div class="form-group">
+                    <label>Barcode</label>
 
-<label>Reorder Level</label>
+                    <input
+                        type="text"
+                        name="barcode"
+                        placeholder="Scan or Enter Barcode">
 
-<input
-type="number"
-name="reorder_level"
-value="5"
-required>
+                </div>
 
-</div>
+                <div class="form-group">
 
-<div class="form-group">
+                    <label>
+                        Product Name
+                        <span style="color:red">*</span>
+                    </label>
 
-<label>Status</label>
+                    <input
+                        type="text"
+                        name="product_name"
+                        required
+                        placeholder="Enter Product Name">
 
-<select name="status">
+                </div>
 
-<option value="Available">Available</option>
+            </div>
 
-<option value="Out of Stock">Out of Stock</option>
 
-</select>
+            <!-- =========================
+                 BUYING & SELLING PRICE
+            ========================== -->
 
-</div>
+            <div class="customer-row">
 
-<br>
+                <div class="form-group">
 
-<button
-type="submit"
-name="save"
-class="btn">
+                    <label>Buying Price</label>
 
-<i class="fa-solid fa-floppy-disk"></i>
+                    <input
+                        type="number"
+                        name="buying_price"
+                        step="0.01"
+                        min="0"
+                        required>
 
-Save Product
+                </div>
 
-</button>
+                <div class="form-group">
 
-<a href="index.php" class="btn">
+                    <label>Selling Price</label>
 
-<i class="fa-solid fa-arrow-left"></i>
+                    <input
+                        type="number"
+                        name="selling_price"
+                        step="0.01"
+                        min="0"
+                        required>
 
-Back
+                </div>
 
-</a>
+            </div>
 
-</form>
 
-</div>
+            <!-- =========================
+                 UNIT & OPENING STOCK
+            ========================== -->
+
+            <div class="customer-row">
+
+                <div class="form-group">
+
+                    <label>Unit</label>
+
+                    <input
+                        type="text"
+                        name="unit"
+                        placeholder="Piece, Box, Packet, Kg"
+                        required>
+
+                </div>
+
+                <div class="form-group">
+
+                    <label>Opening Stock</label>
+
+                    <input
+                        type="number"
+                        name="quantity"
+                        value="0"
+                        min="0"
+                        required>
+
+                </div>
+
+     </div>           
+                 <!-- =========================
+                 REORDER LEVEL & STATUS
+            ========================== -->
+
+            <div class="customer-row">
+
+                <div class="form-group">
+
+                    <label>Reorder Level</label>
+
+                    <input
+                        type="number"
+                        name="reorder_level"
+                        value="5"
+                        min="0"
+                        required>
+
+                </div>
+
+                <div class="form-group">
+
+                    <label>Status</label>
+
+                    <select name="status" required>
+
+                        <option value="Available" selected>
+                            Available
+                        </option>
+
+                        <option value="Out of Stock">
+                            Out of Stock
+                        </option>
+
+                    </select>
+
+                </div>
+
+            </div>
+
+
+            <!-- =========================
+                 BUTTONS
+            ========================== -->
+
+            <div class="customer-buttons">
+
+                <button
+                    type="submit"
+                    name="save"
+                    class="customer-btn customer-save">
+
+                    <i class="fa-solid fa-floppy-disk"></i>
+
+                    Save Product
+
+                </button>
+
+                <a
+                    href="index.php"
+                    class="customer-btn customer-back">
+
+                    <i class="fa-solid fa-arrow-left"></i>
+
+                    Back
+
+                </a>
+
+            </div>
+
+        </form>
+
+    </div>
 
 </div>
 

@@ -1,257 +1,291 @@
-/* =====================================================
-   CUSTOMER FORM PANEL
-=====================================================*/
+/* ==========================================
+   CUSTOMER ACTION BUTTONS
+========================================== */
 
-.customer-panel{
+.action-group{
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    gap:10px;
+    flex-wrap:wrap;
+}
 
-    background:#ffffff;
-    border-radius:18px;
+.action{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    gap:7px;
+    min-width:90px;
+    padding:10px 16px;
+    border-radius:8px;
+    text-decoration:none;
+    font-size:13px;
+    font-weight:600;
+    color:#fff;
+    transition:all .25s ease;
+    box-shadow:0 2px 8px rgba(0,0,0,.12);
+}
+
+.action i{
+    font-size:14px;
+}
+
+/* View */
+
+.action:first-child{
+    background:#0d6efd;
+}
+
+.action:first-child:hover{
+    background:#0b5ed7;
+    transform:translateY(-2px);
+    box-shadow:0 8px 18px rgba(13,110,253,.25);
+}
+
+/* Edit */
+
+.action.edit{
+    background:#198754;
+}
+
+.action.edit:hover{
+    background:#157347;
+    transform:translateY(-2px);
+    box-shadow:0 8px 18px rgba(25,135,84,.25);
+}
+
+/* Delete */
+
+.action.delete{
+    background:#dc3545;
+}
+
+.action.delete:hover{
+    background:#bb2d3b;
+    transform:translateY(-2px);
+    box-shadow:0 8px 18px rgba(220,53,69,.25);
+}
+
+/* Click effect */
+
+.action:active{
+    transform:scale(.96);
+}
+
+/* Mobile */
+
+@media(max-width:768px){
+
+    .action-group{
+        flex-direction:column;
+        width:100%;
+    }
+
+    .action{
+        width:100%;
+    }
+
+}
+/* ===============================
+   CUSTOMER PROFILE
+=============================== */
+
+.customer-profile{
+    background:#fff;
+    border-radius:12px;
     padding:30px;
-    box-shadow:0 10px 30px rgba(0,0,0,0.08);
-    border:1px solid #eeeeee;
-    margin-bottom:25px;
-
+    box-shadow:0 8px 25px rgba(0,0,0,.08);
 }
 
+.profile-header{
+    display:flex;
+    align-items:center;
+    gap:20px;
+    margin-bottom:30px;
+    padding-bottom:20px;
+    border-bottom:1px solid #eee;
+}
 
-/* =====================================================
-   FORM LAYOUT
-=====================================================*/
+.avatar{
+    width:90px;
+    height:90px;
+    border-radius:50%;
+    background:#0d6efd;
+    color:#fff;
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    font-size:40px;
+}
 
-.customer-panel form{
+.profile-grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(350px,1fr));
+    gap:25px;
+}
 
+.profile-card{
+    background:#fafafa;
+    border-radius:10px;
+    padding:20px;
+    border:1px solid #ececec;
+}
+
+.profile-card h3{
+    margin-bottom:15px;
+    color:#0d6efd;
+}
+
+.profile-table{
     width:100%;
+    border-collapse:collapse;
+}
 
+.profile-table td{
+    padding:12px 8px;
+    border-bottom:1px solid #ececec;
+}
+
+.profile-table td:first-child{
+    font-weight:600;
+    width:40%;
+    color:#555;
+}
+
+.badge-active{
+    background:#198754;
+    color:#fff;
+    padding:6px 12px;
+    border-radius:20px;
+    font-size:12px;
+}
+
+.badge-inactive{
+    background:#dc3545;
+    color:#fff;
+    padding:6px 12px;
+    border-radius:20px;
+    font-size:12px;
+}
+.customer-panel {
+    background: #fff;
+    padding: 30px;
+    border-radius: 12px;
+    box-shadow: 0 5px 20px rgba(0,0,0,0.08);
 }
 
 
-.customer-row{
+.customer-row {
 
     display:flex;
-    gap:25px;
-    margin-bottom:5px;
+
+    gap:20px;
+
+    margin-bottom:20px;
 
 }
 
 
-.customer-row .form-group{
+.customer-row .form-group {
 
     flex:1;
 
 }
 
 
-.form-group{
+.form-group {
 
-    display:flex;
-    flex-direction:column;
-    margin-bottom:18px;
+    margin-bottom:20px;
 
 }
 
 
-.form-group label{
+.form-group label {
 
-    font-size:14px;
+    display:block;
+
     font-weight:600;
-    color:#34495e;
-    margin-bottom:7px;
+
+    margin-bottom:8px;
 
 }
-
-
-.required{
-
-    color:#e74c3c;
-
-}
-
-
-/* =====================================================
-   INPUTS
-=====================================================*/
 
 
 .form-group input,
 .form-group select,
-.form-group textarea{
+.form-group textarea {
+
 
     width:100%;
-    height:45px;
-    padding:10px 14px;
 
-    border:1px solid #dcdcdc;
-    border-radius:10px;
+    padding:12px;
 
-    background:#f8f9fa;
-    color:#333;
+    border:1px solid #ddd;
 
-    font-size:15px;
+    border-radius:8px;
 
-    transition:all .3s ease;
-
-    box-sizing:border-box;
-
-}
-
-
-.form-group textarea{
-
-    height:auto;
-    min-height:120px;
-    resize:vertical;
-
-}
-
-
-
-.form-group input:hover,
-.form-group select:hover,
-.form-group textarea:hover{
-
-    border-color:#b8c7d9;
+    font-size:14px;
 
 }
 
 
 
 .form-group input:focus,
-.form-group select:focus,
-.form-group textarea:focus{
+.form-group select:focus {
 
-    outline:none;
-
-    background:#fff;
 
     border-color:#0d6efd;
 
-    box-shadow:
-    0 0 0 3px rgba(13,110,253,.12);
+    outline:none;
 
 }
 
 
-/* =====================================================
-   BUTTON SECTION
-=====================================================*/
 
-
-.customer-buttons{
+.customer-buttons {
 
     display:flex;
+
     gap:15px;
-    margin-top:30px;
+
+    margin-top:25px;
 
 }
 
 
 
-.customer-btn{
+.customer-btn {
 
-    display:inline-flex;
-    align-items:center;
-    justify-content:center;
+    padding:12px 22px;
 
-    padding:12px 28px;
+    border-radius:8px;
 
-    border-radius:10px;
-
-    font-size:15px;
-    font-weight:600;
-
-    color:white;
     text-decoration:none;
 
     border:none;
+
     cursor:pointer;
 
-    transition:.3s ease;
+    font-weight:600;
 
 }
 
 
 
-/* SAVE BUTTON */
-
-.customer-save{
+.customer-save {
 
     background:#198754;
 
-}
-
-
-.customer-save:hover{
-
-    background:#157347;
-    transform:translateY(-2px);
-    box-shadow:0 5px 15px rgba(25,135,84,.25);
+    color:white;
 
 }
 
 
 
-/* BACK BUTTON */
+.customer-back {
 
-.customer-back{
+    background:#6c757d;
 
-    background:#0d6efd;
+    color:white;
 
-}
-
-
-
-.customer-back:hover{
-
-    background:#0b5ed7;
-
-    transform:translateY(-2px);
-
-    box-shadow:0 5px 15px rgba(13,110,253,.25);
-
-}
-
-
-
-/* =====================================================
-   MOBILE RESPONSIVE
-=====================================================*/
-
-
-@media(max-width:768px){
-
-
-.customer-panel{
-
-    padding:20px;
-
-}
-
-
-.customer-row{
-
-    flex-direction:column;
-    gap:0;
-
-}
-
-
-
-.customer-buttons{
-
-    flex-direction:column;
-
-}
-
-
-
-.customer-btn{
-
-    width:100%;
-
-}
-
-
-}
-.customer-panel{
-    background:red !important;
 }
