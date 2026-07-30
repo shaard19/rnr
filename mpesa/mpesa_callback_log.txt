@@ -1,0 +1,24 @@
+2026-07-31 00:22:25 CALLBACK RECEIVED:
+
+
+2026-07-31 00:22:43 CALLBACK RECEIVED:
+
+
+2026-07-31 00:29:02 CALLBACK RECEIVED:
+{"Body":{"stkCallback":{"MerchantRequestID":"4af3-460e-8d7d-8613f9362e9122480","CheckoutRequestID":"ws_CO_310720260130240708374149","ResultCode":1037,"ResultDesc":"DS timeout user cannot be reached."}}}
+
+Status: FAILED
+MerchantRequestID: 4af3-460e-8d7d-8613f9362e9122480
+CheckoutRequestID: ws_CO_310720260130240708374149
+ResultCode: 1037
+ResultDescription: DS timeout user cannot be reached.
+
+2026-07-31 01:07:46 CALLBACK RECEIVED:
+{"Body":{"stkCallback":{"MerchantRequestID":"125e-4091-abd7-137c1517ac6f20752","CheckoutRequestID":"ws_CO_310720260208448708374149","ResultCode":1037,"ResultDesc":"No response from user."}}}
+
+Status: FAILED
+MerchantRequestID: 125e-4091-abd7-137c1517ac6f20752
+CheckoutRequestID: ws_CO_310720260208448708374149
+ResultCode: 1037
+ResultDescription: No response from user.
+
