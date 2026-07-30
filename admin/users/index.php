@@ -34,12 +34,15 @@ $result = mysqli_query(
         username,
         role,
         status,
-        last_login,
-        created_at
+        last_login
     FROM users
     ORDER BY id DESC
     "
 );
+
+if (!$result) {
+    die("USERS QUERY ERROR: " . mysqli_error($conn));
+}
 
 ?>
 
@@ -150,9 +153,7 @@ Status
 Last Login
 </th>
 
-<th>
-Created
-</th>
+
 
 <th>
 Actions
@@ -262,12 +263,6 @@ if (!empty($user['last_login'])) {
 
 <td>
 
-<?= date(
-    'd M Y',
-    strtotime($user['created_at'])
-); ?>
-
-</td>
 
 
 <td>
@@ -309,7 +304,7 @@ if (!empty($user['last_login'])) {
 <tr>
 
 <td
-    colspan="8"
+    colspan="7"
     class="empty-state"
 >
 

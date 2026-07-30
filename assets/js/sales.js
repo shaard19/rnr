@@ -1,105 +1,356 @@
-console.log("SALES JS LOADED");
-
-let cart = [];
-
-
-// ======================================================
-// INITIALIZE POS
-// ======================================================
+console.log("RNR SALES JS - CREDIT FIX");
 
 document.addEventListener("DOMContentLoaded", function () {
 
-    console.log("POS JavaScript initialized");
-
-    activateProducts();
-    setupSearch();
-    setupCategories();
-    setupPayment();
-    setupCompleteSale();
-
-});
+    console.log("POS JAVASCRIPT READY");
 
 
-// ======================================================
-// ADD PRODUCT TO CART
-// ======================================================
+    /*
+    |--------------------------------------------------------------------------
+    | ELEMENTS
+    |--------------------------------------------------------------------------
+    */
 
-function addProductToCart(button) {
+    const searchInput =
+        document.getElementById("productSearch");
 
-    const id = String(button.dataset.id);
-    const name = button.dataset.name;
-    const price = parseFloat(button.dataset.price) || 0;
+    const productsContainer =
+        document.getElementById("products");
 
-    let existing = cart.find(item => item.id === id);
+    const cartContainer =
+        document.getElementById("cart");
 
-    if (existing) {
+    const customerSelect =
+        document.getElementById("customer");
 
-        existing.qty++;
+    const subtotalElement =
+        document.getElementById("subtotal");
 
-    } else {
+    const discountElement =
+        document.getElementById("discount");
 
-        cart.push({
-            id: id,
-            name: name,
-            price: price,
-            qty: 1
+    const totalElement =
+        document.getElementById("total");
+
+    const amountInput =
+        document.getElementById("amount");
+
+    const changeElement =
+        document.getElementById("change");
+
+    const completeSaleButton =
+        document.getElementById("complete-sale");
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | CART
+    |--------------------------------------------------------------------------
+    */
+
+    let cart = [];
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | FORMAT MONEY
+    |--------------------------------------------------------------------------
+    */
+
+    function formatMoney(value) {
+
+        return Number(value).toLocaleString("en-US", {
+
+            minimumFractionDigits: 2,
+
+            maximumFractionDigits: 2
+
         });
 
     }
 
-    displayCart();
-}
 
+    /*
+    |--------------------------------------------------------------------------
+    | ESCAPE HTML
+    |--------------------------------------------------------------------------
+    */
 
-// ======================================================
-// ACTIVATE ADD BUTTONS
-// ======================================================
+    function escapeHtml(value) {
 
-function activateProducts() {
+        const div =
+            document.createElement("div");
 
-    const buttons = document.querySelectorAll(".add-cart");
+        div.textContent = value;
 
-    buttons.forEach(button => {
+        return div.innerHTML;
 
-        button.onclick = function () {
-
-            addProductToCart(this);
-
-        };
-
-    });
-
-}
-
-
-// ======================================================
-// DISPLAY CART
-// ======================================================
-
-function displayCart() {
-
-    const cartTable = document.getElementById("cart");
-
-    if (!cartTable) {
-        console.error("Cart element #cart not found");
-        return;
     }
 
-    cartTable.innerHTML = "";
 
-    let subtotal = 0;
+    /*
+    |--------------------------------------------------------------------------
+    | GET CART TOTAL
+    |--------------------------------------------------------------------------
+    */
+
+    function getCartTotal() {
+
+        let total = 0;
+
+        cart.forEach(function (item) {
+
+            total +=
+                Number(item.price) *
+                Number(item.quantity);
+
+        });
+
+        return total;
+
+    }
 
 
-    cart.forEach((item, index) => {
+    /*
+    |--------------------------------------------------------------------------
+    | PRODUCT SEARCH
+    |--------------------------------------------------------------------------
+    */
 
-        const itemTotal = item.qty * item.price;
+    if (searchInput) {
 
-        subtotal += itemTotal;
+        searchInput.addEventListener(
+            "input",
+            function () {
+
+                const search =
+                    this.value
+                        .trim()
+                        .toLowerCase();
 
 
-        cartTable.innerHTML += `
+                document
+                    .querySelectorAll(".product-card")
+                    .forEach(function (card) {
 
-            <tr>
+                        const name =
+                            card.dataset.name || "";
+
+                        const code =
+                            card.dataset.code || "";
+
+
+                        if (
+                            name.includes(search) ||
+                            code.includes(search)
+                        ) {
+
+                            card.style.display = "";
+
+                        } else {
+
+                            card.style.display = "none";
+
+                        }
+
+                    });
+
+            }
+        );
+
+    }
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | CATEGORY FILTER
+    |--------------------------------------------------------------------------
+    */
+
+    document
+        .querySelectorAll(".category-btn")
+        .forEach(function (button) {
+
+            button.addEventListener(
+                "click",
+                function () {
+
+                    const categoryId =
+                        this.dataset.id;
+
+
+                    if (searchInput) {
+
+                        searchInput.value = "";
+
+                    }
+
+
+                    document
+                        .querySelectorAll(".product-card")
+                        .forEach(function (card) {
+
+                            if (
+                                card.dataset.category ===
+                                categoryId
+                            ) {
+
+                                card.style.display = "";
+
+                            } else {
+
+                                card.style.display = "none";
+
+                            }
+
+                        });
+
+                }
+            );
+
+        });
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | ADD PRODUCT TO CART
+    |--------------------------------------------------------------------------
+    */
+
+    document.addEventListener(
+        "click",
+        function (event) {
+
+            const button =
+                event.target.closest(".add-cart");
+
+
+            if (!button) {
+
+                return;
+
+            }
+
+
+            const productId =
+                button.dataset.id;
+
+            const productName =
+                button.dataset.name;
+
+            const productPrice =
+                parseFloat(
+                    button.dataset.price
+                );
+
+
+            if (
+                !productId ||
+                !productName ||
+                isNaN(productPrice)
+            ) {
+
+                alert(
+                    "Invalid product information."
+                );
+
+                return;
+
+            }
+
+
+            const existingProduct =
+                cart.find(function (item) {
+
+                    return item.id === productId;
+
+                });
+
+
+            if (existingProduct) {
+
+                existingProduct.quantity++;
+
+            } else {
+
+                cart.push({
+
+                    id: productId,
+
+                    name: productName,
+
+                    price: productPrice,
+
+                    quantity: 1
+
+                });
+
+            }
+
+
+            renderCart();
+
+        }
+    );
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | RENDER CART
+    |--------------------------------------------------------------------------
+    */
+
+    function renderCart() {
+
+        if (!cartContainer) {
+
+            return;
+
+        }
+
+
+        cartContainer.innerHTML = "";
+
+
+        if (cart.length === 0) {
+
+            cartContainer.innerHTML = `
+
+                <tr>
+
+                    <td
+                        colspan="5"
+                        style="text-align:center;"
+                    >
+
+                        Cart is empty
+
+                    </td>
+
+                </tr>
+
+            `;
+
+
+            updateTotals();
+
+            return;
+
+        }
+
+
+        cart.forEach(function (item, index) {
+
+            const row =
+                document.createElement("tr");
+
+
+            const itemTotal =
+                Number(item.price) *
+                Number(item.quantity);
+
+
+            row.innerHTML = `
 
                 <td>
                     ${escapeHtml(item.name)}
@@ -109,773 +360,786 @@ function displayCart() {
 
                     <button
                         type="button"
-                        class="qty-btn"
-                        onclick="decreaseQty(${index})">
+                        class="qty-minus"
+                        data-index="${index}"
+                    >
                         −
                     </button>
 
-                    <span class="cart-qty">
-                        ${item.qty}
-                    </span>
+                    <strong style="margin:0 8px;">
+                        ${item.quantity}
+                    </strong>
 
                     <button
                         type="button"
-                        class="qty-btn"
-                        onclick="increaseQty(${index})">
+                        class="qty-plus"
+                        data-index="${index}"
+                    >
                         +
                     </button>
 
                 </td>
 
                 <td>
-                    ${item.price.toFixed(2)}
+                    KSh ${formatMoney(item.price)}
                 </td>
 
                 <td>
-                    ${itemTotal.toFixed(2)}
+                    KSh ${formatMoney(itemTotal)}
                 </td>
 
                 <td>
 
                     <button
                         type="button"
-                        class="remove-item"
-                        onclick="removeItem(${index})">
-                        ✕
+                        class="remove-cart"
+                        data-index="${index}"
+                    >
+                        Remove
                     </button>
 
                 </td>
 
-            </tr>
-
-        `;
-
-    });
-
-
-    const subtotalElement =
-        document.getElementById("subtotal");
-
-    const totalElement =
-        document.getElementById("total");
-
-
-    if (subtotalElement) {
-
-        subtotalElement.textContent =
-            subtotal.toFixed(2);
-
-    }
-
-
-    if (totalElement) {
-
-        totalElement.textContent =
-            subtotal.toFixed(2);
-
-    }
-
-
-    calculateChange();
-
-}
-
-
-// ======================================================
-// INCREASE QUANTITY
-// ======================================================
-
-function increaseQty(index) {
-
-    if (!cart[index]) {
-        return;
-    }
-
-    cart[index].qty++;
-
-    displayCart();
-
-}
-
-
-// ======================================================
-// DECREASE QUANTITY
-// ======================================================
-
-function decreaseQty(index) {
-
-    if (!cart[index]) {
-        return;
-    }
-
-    if (cart[index].qty > 1) {
-
-        cart[index].qty--;
-
-    } else {
-
-        cart.splice(index, 1);
-
-    }
-
-    displayCart();
-
-}
-
-
-// ======================================================
-// REMOVE ITEM
-// ======================================================
-
-function removeItem(index) {
-
-    if (!cart[index]) {
-        return;
-    }
-
-    cart.splice(index, 1);
-
-    displayCart();
-
-}
-
-
-// ======================================================
-// PAYMENT / CHANGE
-// ======================================================
-
-function setupPayment() {
-
-    const amount =
-        document.getElementById("amount");
-
-    if (!amount) {
-        return;
-    }
-
-    amount.addEventListener(
-        "input",
-        calculateChange
-    );
-
-}
-
-
-function calculateChange() {
-
-    const amountElement =
-        document.getElementById("amount");
-
-    const totalElement =
-        document.getElementById("total");
-
-    const changeElement =
-        document.getElementById("change");
-
-
-    if (
-        !amountElement ||
-        !totalElement ||
-        !changeElement
-    ) {
-        return;
-    }
-
-
-    const amount =
-        parseFloat(amountElement.value) || 0;
-
-    const total =
-        parseFloat(totalElement.textContent) || 0;
-
-
-    let change =
-        amount - total;
-
-
-    if (change < 0) {
-        change = 0;
-    }
-
-
-    changeElement.textContent =
-        change.toFixed(2);
-
-}
-
-
-// ======================================================
-// LIVE PRODUCT SEARCH
-// ======================================================
-
-function setupSearch() {
-
-    const searchBox =
-        document.getElementById("productSearch");
-
-    const productsContainer =
-        document.getElementById("products");
-
-
-    if (!searchBox) {
-
-        console.error(
-            "Search box #productSearch not found"
-        );
-
-        return;
-    }
-
-
-    if (!productsContainer) {
-
-        console.error(
-            "Products container #products not found"
-        );
-
-        return;
-    }
-
-
-    searchBox.addEventListener(
-        "input",
-        function () {
-
-            const search =
-                this.value.trim();
-
-
-            console.log(
-                "Searching for:",
-                search
-            );
-
-
-            // Clear products when search is empty
-
-            if (search.length === 0) {
-
-                productsContainer.innerHTML = "";
-
-                return;
-
-            }
-
-
-            // Wait until at least 2 characters
-
-            if (search.length < 2) {
-
-                productsContainer.innerHTML = "";
-
-                return;
-
-            }
-
-
-            productsContainer.innerHTML = `
-                <div class="search-loading">
-                    Searching...
-                </div>
             `;
 
 
-            /*
-             * IMPORTANT:
-             *
-             * index.php and search_product.php
-             * are in the SAME folder:
-             *
-             * admin/sales/
-             *
-             * Therefore this is the correct path.
-             */
+            cartContainer.appendChild(row);
 
-            const url =
-                "search_product.php?search="
-                + encodeURIComponent(search);
+        });
 
 
-            console.log(
-                "Search URL:",
-                url
-            );
+        updateTotals();
+
+    }
 
 
-            fetch(url, {
-                method: "GET",
-                headers: {
-                    "X-Requested-With": "XMLHttpRequest"
+    /*
+    |--------------------------------------------------------------------------
+    | CART BUTTONS
+    |--------------------------------------------------------------------------
+    */
+
+    if (cartContainer) {
+
+        cartContainer.addEventListener(
+            "click",
+            function (event) {
+
+                const plusButton =
+                    event.target.closest(".qty-plus");
+
+
+                if (plusButton) {
+
+                    const index =
+                        parseInt(
+                            plusButton.dataset.index
+                        );
+
+
+                    if (cart[index]) {
+
+                        cart[index].quantity++;
+
+                        renderCart();
+
+                    }
+
+
+                    return;
+
                 }
-            })
 
 
-            .then(response => {
+                const minusButton =
+                    event.target.closest(".qty-minus");
 
-                if (!response.ok) {
 
-                    throw new Error(
-                        "HTTP Error " +
-                        response.status
-                    );
+                if (minusButton) {
+
+                    const index =
+                        parseInt(
+                            minusButton.dataset.index
+                        );
+
+
+                    if (cart[index]) {
+
+                        cart[index].quantity--;
+
+
+                        if (
+                            cart[index].quantity <= 0
+                        ) {
+
+                            cart.splice(index, 1);
+
+                        }
+
+
+                        renderCart();
+
+                    }
+
+
+                    return;
 
                 }
 
-                return response.text();
 
-            })
-
-
-            .then(data => {
-
-                console.log(
-                    "Search response received"
-                );
+                const removeButton =
+                    event.target.closest(".remove-cart");
 
 
-                productsContainer.innerHTML =
-                    data;
+                if (removeButton) {
+
+                    const index =
+                        parseInt(
+                            removeButton.dataset.index
+                        );
 
 
-                // Reconnect Add buttons
+                    if (!isNaN(index)) {
 
-                activateProducts();
+                        cart.splice(index, 1);
 
-            })
+                        renderCart();
+
+                    }
+
+                }
+
+            }
+        );
+
+    }
 
 
-            .catch(error => {
+    /*
+    |--------------------------------------------------------------------------
+    | UPDATE TOTALS
+    |--------------------------------------------------------------------------
+    */
 
-                console.error(
-                    "Search error:",
-                    error
-                );
+    function updateTotals() {
+
+        const subtotal =
+            getCartTotal();
 
 
-                productsContainer.innerHTML = `
-                    <div class="search-error">
-                        Unable to search products.
-                    </div>
-                `;
+        const discount = 0;
 
-            });
+
+        const total =
+            subtotal - discount;
+
+
+        if (subtotalElement) {
+
+            subtotalElement.textContent =
+                formatMoney(subtotal);
 
         }
-    );
-
-}
 
 
-// ======================================================
-// CATEGORY FILTER
-// ======================================================
+        if (discountElement) {
 
-function setupCategories() {
+            discountElement.textContent =
+                formatMoney(discount);
 
-    const categoryButtons =
-        document.querySelectorAll(".category-btn");
+        }
 
 
-    categoryButtons.forEach(button => {
+        if (totalElement) {
 
-        button.addEventListener(
-            "click",
+            totalElement.textContent =
+                formatMoney(total);
+
+        }
+
+
+        updateChange();
+
+    }
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | UPDATE PAYMENT DISPLAY
+    |--------------------------------------------------------------------------
+    */
+
+    function updateChange() {
+
+        if (!changeElement) {
+
+            return;
+
+        }
+
+
+        const total =
+            getCartTotal();
+
+
+        const amountPaid =
+            parseFloat(
+                amountInput?.value
+            ) || 0;
+
+
+        if (
+            amountPaid <= 0 ||
+            total <= 0
+        ) {
+
+            changeElement.textContent =
+                "0.00";
+
+            return;
+
+        }
+
+
+        const change =
+            amountPaid - total;
+
+
+        if (change >= 0) {
+
+            changeElement.textContent =
+                formatMoney(change);
+
+        } else {
+
+            /*
+            |--------------------------------------------------------------------------
+            | Partial payment / credit
+            |--------------------------------------------------------------------------
+            |
+            | Do not display a negative change.
+            |
+            */
+
+            changeElement.textContent =
+                "0.00";
+
+        }
+
+    }
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | AMOUNT INPUT
+    |--------------------------------------------------------------------------
+    */
+
+    if (amountInput) {
+
+        amountInput.addEventListener(
+            "input",
             function () {
 
-                const categoryId =
-                    this.dataset.id;
+                updateChange();
+
+            }
+        );
+
+    }
 
 
-                const productsContainer =
-                    document.getElementById("products");
+    /*
+    |--------------------------------------------------------------------------
+    | PAYMENT METHOD CHANGE
+    |--------------------------------------------------------------------------
+    */
+
+    document
+        .querySelectorAll(
+            'input[name="payment"]'
+        )
+        .forEach(function (radio) {
+
+            radio.addEventListener(
+                "change",
+                function () {
+
+                    /*
+                    |--------------------------------------------------------------------------
+                    | IMPORTANT
+                    |--------------------------------------------------------------------------
+                    | DO NOT CLEAR AMOUNT FOR CREDIT.
+                    |
+                    | Credit can now be:
+                    |
+                    | 0 paid
+                    | 100 paid
+                    | 150 paid
+                    | etc.
+                    |
+                    */
+
+                    updateChange();
+
+                }
+            );
+
+        });
 
 
-                if (!productsContainer) {
+    /*
+    |--------------------------------------------------------------------------
+    | COMPLETE SALE
+    |--------------------------------------------------------------------------
+    */
+
+    if (completeSaleButton) {
+
+        completeSaleButton.addEventListener(
+            "click",
+            async function () {
+
+                console.log(
+                    "COMPLETE SALE CLICKED"
+                );
+
+
+                /*
+                |--------------------------------------------------------------------------
+                | CART CHECK
+                |--------------------------------------------------------------------------
+                */
+
+                if (cart.length === 0) {
+
+                    alert(
+                        "Please add a product to the cart first."
+                    );
+
                     return;
+
                 }
 
 
-                productsContainer.innerHTML = `
-                    <div class="search-loading">
-                        Loading products...
-                    </div>
-                `;
+                /*
+                |--------------------------------------------------------------------------
+                | PAYMENT METHOD
+                |--------------------------------------------------------------------------
+                */
+
+                const paymentInput =
+                    document.querySelector(
+                        'input[name="payment"]:checked'
+                    );
 
 
-                const url =
-                    "search_product.php?category_id="
-                    + encodeURIComponent(categoryId);
+                if (!paymentInput) {
+
+                    alert(
+                        "Please select a payment method."
+                    );
+
+                    return;
+
+                }
 
 
-                fetch(url, {
-                    method: "GET",
-                    headers: {
-                        "X-Requested-With": "XMLHttpRequest"
+                const paymentMethod =
+                    paymentInput.value;
+
+
+                /*
+                |--------------------------------------------------------------------------
+                | TOTAL
+                |--------------------------------------------------------------------------
+                */
+
+                const total =
+                    getCartTotal();
+
+
+                /*
+                |--------------------------------------------------------------------------
+                | AMOUNT PAID
+                |--------------------------------------------------------------------------
+                */
+
+                const amountPaid =
+                    parseFloat(
+                        amountInput?.value
+                    ) || 0;
+
+
+                /*
+                |--------------------------------------------------------------------------
+                | CUSTOMER
+                |--------------------------------------------------------------------------
+                */
+
+                const customerId =
+                    customerSelect &&
+                    customerSelect.value !== ""
+                        ? parseInt(
+                            customerSelect.value
+                        )
+                        : null;
+
+
+                /*
+                |--------------------------------------------------------------------------
+                | PAYMENT TYPE
+                |--------------------------------------------------------------------------
+                */
+
+                const isCredit =
+                    paymentMethod === "Credit";
+
+
+                /*
+                |--------------------------------------------------------------------------
+                | CREDIT VALIDATION
+                |--------------------------------------------------------------------------
+                */
+
+                if (isCredit) {
+
+                    /*
+                    | Credit requires customer.
+                    */
+
+                    if (!customerId) {
+
+                        alert(
+                            "Please select a registered customer for a credit sale."
+                        );
+
+                        return;
+
                     }
-                })
 
 
-                .then(response => {
+                    /*
+                    | Partial credit is allowed.
+                    |
+                    | Example:
+                    |
+                    | Total = 160
+                    | Paid  = 100
+                    | Credit = 60
+                    */
 
-                    if (!response.ok) {
+                    if (amountPaid > total) {
 
-                        throw new Error(
-                            "HTTP Error " +
-                            response.status
+                        alert(
+                            "Amount paid cannot exceed the sale total."
+                        );
+
+                        return;
+
+                    }
+
+                } else {
+
+                    /*
+                    |--------------------------------------------------------------------------
+                    | CASH / MPESA
+                    |--------------------------------------------------------------------------
+                    */
+
+                    if (amountPaid < total) {
+
+                        alert(
+                            "Amount paid is less than the total."
+                        );
+
+                        return;
+
+                    }
+
+                }
+
+
+                /*
+                |--------------------------------------------------------------------------
+                | SALE DATA
+                |--------------------------------------------------------------------------
+                |
+                | CRITICAL FIX:
+                |
+                | We now ALWAYS send the actual amountPaid.
+                |
+                | Previously:
+                |
+                | amount_paid: isCredit ? 0 : amountPaid
+                |
+                | That was forcing every credit sale to KSh 0.
+                |
+                */
+
+                const saleData = {
+
+                    customer_id:
+                        customerId,
+
+                    payment_method:
+                        paymentMethod,
+
+                    payment_status:
+                        isCredit
+                            ? "Credit"
+                            : null,
+
+                    amount_paid:
+                        amountPaid,
+
+                    cart:
+                        cart.map(function (item) {
+
+                            return {
+
+                                id:
+                                    parseInt(item.id),
+
+                                quantity:
+                                    parseInt(
+                                        item.quantity
+                                    )
+
+                            };
+
+                        })
+
+                };
+
+
+                console.log(
+                    "SALE DATA:",
+                    saleData
+                );
+
+
+                /*
+                |--------------------------------------------------------------------------
+                | PROCESSING
+                |--------------------------------------------------------------------------
+                */
+
+                completeSaleButton.disabled =
+                    true;
+
+
+                completeSaleButton.textContent =
+                    "PROCESSING...";
+
+
+                try {
+
+                    const response =
+                        await fetch(
+                            "process_sale.php",
+                            {
+
+                                method: "POST",
+
+                                headers: {
+
+                                    "Content-Type":
+                                        "application/json",
+
+                                    "Accept":
+                                        "application/json"
+
+                                },
+
+                                body:
+                                    JSON.stringify(
+                                        saleData
+                                    )
+
+                            }
+                        );
+
+
+                    const responseText =
+                        await response.text();
+
+
+                    console.log(
+                        "PHP RESPONSE:",
+                        responseText
+                    );
+
+
+                    let data;
+
+
+                    try {
+
+                        data =
+                            JSON.parse(
+                                responseText
+                            );
+
+                    } catch (jsonError) {
+
+                        console.error(
+                            "JSON ERROR:",
+                            jsonError
+                        );
+
+
+                        alert(
+                            "Server returned an invalid response:\n\n" +
+                            responseText
+                        );
+
+                        return;
+
+                    }
+
+
+                    /*
+                    |--------------------------------------------------------------------------
+                    | FAILED
+                    |--------------------------------------------------------------------------
+                    */
+
+                    if (!data.success) {
+
+                        alert(
+                            data.message ||
+                            "Sale could not be completed."
+                        );
+
+                        return;
+
+                    }
+
+
+                    /*
+                    |--------------------------------------------------------------------------
+                    | SUCCESS - OPEN RECEIPT
+                    |--------------------------------------------------------------------------
+                    */
+
+                    if (data.sale_id) {
+
+                        window.open(
+                            "receipt.php?id=" +
+                            encodeURIComponent(
+                                data.sale_id
+                            ),
+                            "_blank",
+                            "width=450,height=700"
+                        );
+
+                    } else {
+
+                        alert(
+                            "Sale completed successfully, " +
+                            "but the receipt could not be opened."
                         );
 
                     }
 
-                    return response.text();
 
-                })
+                    /*
+                    |--------------------------------------------------------------------------
+                    | CLEAR CART
+                    |--------------------------------------------------------------------------
+                    */
 
+                    cart = [];
 
-                .then(data => {
-
-                    productsContainer.innerHTML =
-                        data;
-
-
-                    activateProducts();
-
-                })
+                    renderCart();
 
 
-                .catch(error => {
+                    /*
+                    |--------------------------------------------------------------------------
+                    | CLEAR AMOUNT
+                    |--------------------------------------------------------------------------
+                    */
+
+                    if (amountInput) {
+
+                        amountInput.value = "";
+
+                    }
+
+
+                    /*
+                    |--------------------------------------------------------------------------
+                    | RESET CUSTOMER
+                    |--------------------------------------------------------------------------
+                    */
+
+                    if (customerSelect) {
+
+                        customerSelect.value = "";
+
+                    }
+
+
+                    /*
+                    |--------------------------------------------------------------------------
+                    | RESET CHANGE
+                    |--------------------------------------------------------------------------
+                    */
+
+                    if (changeElement) {
+
+                        changeElement.textContent =
+                            "0.00";
+
+                    }
+
+
+                } catch (error) {
 
                     console.error(
-                        "Category error:",
+                        "SALE PROCESSING ERROR:",
                         error
                     );
 
 
-                    productsContainer.innerHTML = `
-                        <div class="search-error">
-                            Unable to load products.
-                        </div>
-                    `;
+                    alert(
 
-                });
+                        "Unable to connect to the sale processor.\n\n" +
+                        error.message
+
+                    );
+
+                } finally {
+
+                    completeSaleButton.disabled =
+                        false;
+
+
+                    completeSaleButton.textContent =
+                        "COMPLETE SALE";
+
+                }
 
             }
         );
 
-    });
-
-}
-
-
-// ======================================================
-// HTML SAFETY
-// ======================================================
-
-function escapeHtml(value) {
-
-    return String(value)
-
-        .replace(/&/g, "&amp;")
-
-        .replace(/</g, "&lt;")
-
-        .replace(/>/g, "&gt;")
-
-        .replace(/"/g, "&quot;")
-
-        .replace(/'/g, "&#039;");
-
-}
-// ======================================================
-// COMPLETE SALE
-// ======================================================
-
-function setupCompleteSale() {
-
-    const saleButton =
-        document.getElementById("complete-sale");
-
-    console.log("SALE BUTTON:", saleButton);
-
-    if (!saleButton) {
-
-        console.error(
-            "Complete Sale button not found"
-        );
-
-        return;
-    }
-
-    saleButton.addEventListener(
-        "click",
-        completeSale
-    );
-
-}
-
-
-// ======================================================
-// PROCESS SALE
-// ======================================================
-
-async function completeSale() {
-
-    console.log("COMPLETE SALE CLICKED");
-
-    if (cart.length === 0) {
-
-        alert(
-            "Please add at least one product to the cart."
-        );
-
-        return;
     }
 
 
-    const paymentElement =
-        document.querySelector(
-            'input[name="payment"]:checked'
-        );
+    /*
+    |--------------------------------------------------------------------------
+    | INITIALIZE
+    |--------------------------------------------------------------------------
+    */
 
+    renderCart();
 
-    const paymentMethod =
-        paymentElement
-            ? paymentElement.value
-            : "Cash";
-
-
-    const amountElement =
-        document.getElementById("amount");
-
-
-    const amountPaid =
-        parseFloat(
-            amountElement.value
-        ) || 0;
-
-
-    const customerElement =
-        document.getElementById("customer");
-
-
-    const customerId =
-        customerElement.value || null;
-
-
-    const totalElement =
-        document.getElementById("total");
-
-
-    const total =
-        parseFloat(
-            totalElement.textContent
-        ) || 0;
-
-
-    // Cash / M-Pesa
-
-    if (
-        (paymentMethod === "Cash" ||
-         paymentMethod === "Mpesa") &&
-        amountPaid < total
-    ) {
-
-        alert(
-            "Amount paid is less than the sale total."
-        );
-
-        return;
-    }
-
-
-    // Credit requires customer
-
-    if (
-        (paymentMethod === "Credit" ||
-         paymentMethod === "Installment") &&
-        !customerId
-    ) {
-
-        alert(
-            "Please select a customer for credit or installment sales."
-        );
-
-        return;
-    }
-
-
-    const saleButton =
-        document.getElementById(
-            "complete-sale"
-        );
-
-
-    saleButton.disabled = true;
-
-    saleButton.textContent =
-        "PROCESSING...";
-
-
-    const saleData = {
-
-        cart: cart.map(item => ({
-
-            id: item.id,
-
-            qty: item.qty
-
-        })),
-
-        payment_method:
-            paymentMethod,
-
-        amount_paid:
-            amountPaid,
-
-        customer_id:
-            customerId,
-
-        discount:
-            0
-
-    };
+    updateChange();
 
 
     console.log(
-        "Sending sale:",
-        saleData
+        "RNR POS READY"
     );
 
-
-    try {
-
-        const response =
-            await fetch(
-                "process_sale.php",
-                {
-
-                    method: "POST",
-
-                    headers: {
-
-                        "Content-Type":
-                            "application/json",
-
-                        "X-Requested-With":
-                            "XMLHttpRequest"
-
-                    },
-
-                    body:
-                        JSON.stringify(
-                            saleData
-                        )
-
-                }
-            );
-
-
-        console.log(
-            "HTTP STATUS:",
-            response.status
-        );
-
-
-        const result =
-            await response.json();
-
-
-        console.log(
-            "SALE RESPONSE:",
-            result
-        );
-
-
-        if (!result.success) {
-
-            alert(
-                result.message ||
-                "Sale failed."
-            );
-
-            saleButton.disabled = false;
-
-            saleButton.textContent =
-                "COMPLETE SALE";
-
-            return;
-        }
-
-
-        alert(
-            "SALE COMPLETED!\n\n" +
-
-            "Invoice: " +
-            result.invoice_no +
-
-            "\nTotal: KSh " +
-            result.total +
-
-            "\nPaid: KSh " +
-            result.amount_paid +
-            "\nChange: KSh " +
-            result.change +
-            "\nBalance: KSh " +
-            result.balance        );
-
-
-        /*
-        Clear cart
-        */
-
-        cart = [];
-
-
-        /*
-        Clear amount
-        */
-
-        amountElement.value = "";
-
-
-        /*
-        Reset customer
-        */
-
-        customerElement.value = "";
-
-
-        /*
-        Refresh cart
-        */
-
-        displayCart();
-
-
-        /*
-        Reload POS
-        */
-
-        window.location.reload();
-
-
-    } catch (error) {
-
-        console.error(
-            "SALE ERROR:",
-            error
-        );
-
-
-        alert(
-            "Could not connect to the sale processor."
-        );
-
-
-        saleButton.disabled = false;
-
-        saleButton.textContent =
-            "COMPLETE SALE";
-
-    }
-
-}
+});

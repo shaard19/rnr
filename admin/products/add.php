@@ -1,4 +1,5 @@
 <?php
+
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
@@ -7,9 +8,17 @@ require_once "../../config/database.php";
 require_once "../../config/permissions.php";
 require_once "../../config/product_code.php";
 
+
+/*
+|--------------------------------------------------------------------------
+| PERMISSION CHECK
+|--------------------------------------------------------------------------
+*/
+
 if (!hasPermission('add_product')) {
     die("Access Denied");
 }
+
 
 /*
 |--------------------------------------------------------------------------
@@ -26,13 +35,14 @@ $categories = mysqli_query(
      FROM categories c
      INNER JOIN departments d
         ON d.id = c.department_id
-     WHERE c.status='Active'
-     ORDER BY d.department_name,c.category_name"
+     WHERE c.status = 'Active'
+     ORDER BY d.department_name, c.category_name"
 );
 
 if (!$categories) {
-    die("Category Error : " . mysqli_error($conn));
+    die("Category Error: " . mysqli_error($conn));
 }
+
 
 /*
 |--------------------------------------------------------------------------
@@ -50,8 +60,9 @@ $suppliers = mysqli_query(
 );
 
 if (!$suppliers) {
-    die("Supplier Error : " . mysqli_error($conn));
+    die("Supplier Error: " . mysqli_error($conn));
 }
+
 
 /*
 |--------------------------------------------------------------------------
@@ -62,6 +73,7 @@ if (!$suppliers) {
 $message = "";
 $message_type = "";
 
+
 /*
 |--------------------------------------------------------------------------
 | SAVE PRODUCT
@@ -70,43 +82,82 @@ $message_type = "";
 
 if (isset($_POST['save'])) {
 
-    $category_id    = (int)$_POST['category_id'];
+    /*
+    |--------------------------------------------------------------------------
+    | GET FORM DATA
+    |--------------------------------------------------------------------------
+    */
 
-    $supplier_id    = !empty($_POST['supplier_id'])
-                        ? (int)$_POST['supplier_id']
-                        : NULL;
+    $category_id = (int)($_POST['category_id'] ?? 0);
 
-    $barcode        = trim($_POST['barcode']);
+    $supplier_id = !empty($_POST['supplier_id'])
+        ? (int)$_POST['supplier_id']
+        : NULL;
 
-    $product_name   = trim($_POST['product_name']);
+    $product_name = trim($_POST['product_name'] ?? '');
 
-    $buying_price   = (float)$_POST['buying_price'];
+    $buying_price = (float)($_POST['buying_price'] ?? 0);
 
-    $selling_price  = (float)$_POST['selling_price'];
+    $selling_price = (float)($_POST['selling_price'] ?? 0);
 
-    $unit           = trim($_POST['unit']);
+    $unit = trim($_POST['unit'] ?? '');
 
-    $quantity       = (int)$_POST['quantity'];
+    $quantity = (int)($_POST['quantity'] ?? 0);
 
-    $reorder_level  = (int)$_POST['reorder_level'];
+    $reorder_level = (int)($_POST['reorder_level'] ?? 0);
 
-    $status         = $_POST['status'];
+    $status = $_POST['status'] ?? 'Active';
 
-    if (empty($product_name)) {
+
+    /*
+    |--------------------------------------------------------------------------
+    | VALIDATION
+    |--------------------------------------------------------------------------
+    */
+
+    if ($category_id <= 0) {
+
+        $message = "Please select a category.";
+        $message_type = "error";
+
+    } elseif (empty($product_name)) {
 
         $message = "Product Name is required.";
+        $message_type = "error";
 
+    } elseif ($buying_price < 0 || $selling_price < 0) {
+
+        $message = "Prices cannot be negative.";
         $message_type = "error";
 
     } elseif ($selling_price < $buying_price) {
 
         $message = "Selling price cannot be less than buying price.";
+        $message_type = "error";
 
+    } elseif ($quantity < 0) {
+
+        $message = "Quantity cannot be negative.";
+        $message_type = "error";
+
+    } elseif ($reorder_level < 0) {
+
+        $message = "Reorder level cannot be negative.";
+        $message_type = "error";
+
+    } elseif (!in_array($status, ['Active', 'Inactive'], true)) {
+
+        $message = "Invalid product status.";
         $message_type = "error";
 
     } else {
 
-        $uuid = generateUUID();
+
+        /*
+        |--------------------------------------------------------------------------
+        | GENERATE PRODUCT CODE
+        |--------------------------------------------------------------------------
+        */
 
         $product_code = generateProductCode(
             $conn,
@@ -119,82 +170,99 @@ if (isset($_POST['save'])) {
 
         }
 
-        $sql = "
-        INSERT INTO products
-        (
-            uuid,
-            category_id,
-            supplier_id,
-            barcode,
-            product_code,
-            product_name,
-            buying_price,
-            selling_price,
-            unit,
-            quantity,
-            reorder_level,
-            status
-        )
 
-        VALUES
-        (
-            ?,?,?,?,?,?,?,?,?,?,?,?
-        )
+        /*
+        |--------------------------------------------------------------------------
+        | INSERT PRODUCT
+        |--------------------------------------------------------------------------
+        */
+
+        $sql = "
+            INSERT INTO products
+            (
+                product_code,
+                product_name,
+                category_id,
+                supplier_id,
+                unit,
+                buying_price,
+                selling_price,
+                quantity,
+                reorder_level,
+                status
+            )
+            VALUES
+            (
+                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+            )
         ";
 
-        $stmt = mysqli_prepare($conn,$sql);
 
-        mysqli_stmt_bind_param(
+        /*
+        |--------------------------------------------------------------------------
+        | PREPARE STATEMENT
+        |--------------------------------------------------------------------------
+        */
 
-            $stmt,
+        $stmt = mysqli_prepare($conn, $sql);
 
-            "siissddsiiss",
+        if (!$stmt) {
 
-            $uuid,
-
-            $category_id,
-
-            $supplier_id,
-
-            $barcode,
-
-            $product_code,
-
-            $product_name,
-
-            $buying_price,
-
-            $selling_price,
-
-            $unit,
-
-            $quantity,
-
-            $reorder_level,
-
-            $status
-
-        );
-
-        if(mysqli_stmt_execute($stmt)){
-
-            header("Location:index.php");
-
-            exit();
-
-        }else{
-
-            $message = mysqli_error($conn);
-
-            $message_type = "error";
+            die(
+                "Product INSERT Prepare Error: "
+                . mysqli_error($conn)
+            );
 
         }
 
-    }
 
+        /*
+        |--------------------------------------------------------------------------
+        | BIND PARAMETERS
+        |--------------------------------------------------------------------------
+        */
+
+        mysqli_stmt_bind_param(
+            $stmt,
+            "ssiisddiis",
+            $product_code,
+            $product_name,
+            $category_id,
+            $supplier_id,
+            $unit,
+            $buying_price,
+            $selling_price,
+            $quantity,
+            $reorder_level,
+            $status
+        );
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | EXECUTE
+        |--------------------------------------------------------------------------
+        */
+
+        if (mysqli_stmt_execute($stmt)) {
+
+            mysqli_stmt_close($stmt);
+
+            header("Location: index.php");
+            exit();
+
+        } else {
+
+            $message = mysqli_stmt_error($stmt);
+            $message_type = "error";
+
+            mysqli_stmt_close($stmt);
+        }
+    }
 }
 
 ?>
+
 <!DOCTYPE html>
 <html lang="en">
 
@@ -202,313 +270,419 @@ if (isset($_POST['save'])) {
 
     <meta charset="UTF-8">
 
-    <meta name="viewport"
-          content="width=device-width, initial-scale=1.0">
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
 
     <title>Add Product | R&R Collection POS</title>
 
-    <link rel="stylesheet"
-          href="../../assets/css/dashboard.css">
 
-    <link rel="stylesheet"
-          href="../../assets/css/sidebar.css">
+    <!-- DASHBOARD CSS -->
 
-    <link rel="stylesheet"
-          href="../../assets/css/form.css">
+    <link
+        rel="stylesheet"
+        href="../../assets/css/dashboard.css"
+    >
 
-    <link rel="stylesheet"
-          href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
+
+    <!-- SIDEBAR CSS -->
+
+    <link
+        rel="stylesheet"
+        href="../../assets/css/sidebar.css"
+    >
+
+
+    <!-- FORM CSS -->
+
+    <link
+        rel="stylesheet"
+        href="../../assets/css/form.css"
+    >
+
+
+    <!-- FONT AWESOME -->
+
+    <link
+        rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css"
+    >
 
 </head>
 
+
 <body>
+
 
 <?php include "../../includes/sidebar.php"; ?>
 
+
 <div class="main">
 
-<?php include "../../includes/topbar.php"; ?>
 
-<div class="container">
+    <?php include "../../includes/topbar.php"; ?>
 
-    <div class="page-title">
 
-        <h1>
+    <div class="container">
 
-            <i class="fa-solid fa-box"></i>
 
-            Add Product
+        <!-- PAGE TITLE -->
 
-        </h1>
+        <div class="page-title">
 
-        <p>Create a new inventory item.</p>
+            <h1>
 
-    </div>
+                <i class="fa-solid fa-box"></i>
 
-    <?php if(!empty($message)): ?>
+                Add Product
 
-        <div class="alert <?= $message_type; ?>">
+            </h1>
 
-            <?= htmlspecialchars($message); ?>
+            <p>
+                Create a new inventory item.
+            </p>
 
         </div>
 
-    <?php endif; ?>
 
-    <div class="customer-panel">
+        <!-- MESSAGE -->
 
-        <form method="POST">
+        <?php if (!empty($message)): ?>
 
-            <!-- =========================
-                 CATEGORY & SUPPLIER
-            ========================== -->
+            <div class="alert <?= htmlspecialchars($message_type); ?>">
 
-            <div class="customer-row">
+                <?= htmlspecialchars($message); ?>
 
-                <div class="form-group">
+            </div>
 
-                    <label>
-                        Category
-                        <span style="color:red">*</span>
-                    </label>
+        <?php endif; ?>
 
-                    <select
-                        name="category_id"
-                        required>
 
-                        <option value="">
-                            Select Category
-                        </option>
+        <!-- PRODUCT FORM -->
 
-                        <?php while($cat=mysqli_fetch_assoc($categories)): ?>
+        <div class="customer-panel">
 
-                            <option
-                                value="<?= $cat['id']; ?>">
 
-                                <?= htmlspecialchars($cat['department_name']); ?>
+            <form method="POST">
 
-                                -
 
-                                <?= htmlspecialchars($cat['category_name']); ?>
+                <!-- =========================
+                     CATEGORY & SUPPLIER
+                ========================== -->
 
+                <div class="customer-row">
+
+
+                    <!-- CATEGORY -->
+
+                    <div class="form-group">
+
+                        <label>
+
+                            Category
+
+                            <span style="color:red">*</span>
+
+                        </label>
+
+
+                        <select
+                            name="category_id"
+                            required
+                        >
+
+                            <option value="">
+                                Select Category
                             </option>
 
-                        <?php endwhile; ?>
 
-                    </select>
+                            <?php while ($cat = mysqli_fetch_assoc($categories)): ?>
 
-                </div>
+                                <option
+                                    value="<?= (int)$cat['id']; ?>"
+                                >
 
-                <div class="form-group">
+                                    <?= htmlspecialchars($cat['department_name']); ?>
 
-                    <label>
+                                    -
 
-                        Supplier
+                                    <?= htmlspecialchars($cat['category_name']); ?>
 
-                    </label>
+                                </option>
 
-                    <select name="supplier_id">
+                            <?php endwhile; ?>
 
-                        <option value="">
+                        </select>
 
-                            No Supplier
+                    </div>
 
-                        </option>
 
-                        <?php while($sup=mysqli_fetch_assoc($suppliers)): ?>
+                    <!-- SUPPLIER -->
 
-                            <option
-                                value="<?= $sup['id']; ?>">
+                    <div class="form-group">
 
-                                <?= htmlspecialchars($sup['supplier_name']); ?>
+                        <label>
+                            Supplier
+                        </label>
 
+
+                        <select name="supplier_id">
+
+                            <option value="">
+                                No Supplier
                             </option>
 
-                        <?php endwhile; ?>
 
-                    </select>
+                            <?php while ($sup = mysqli_fetch_assoc($suppliers)): ?>
 
-                </div>
+                                <option
+                                    value="<?= (int)$sup['id']; ?>"
+                                >
 
-            </div>
-             <!-- =========================
-                 BARCODE & PRODUCT NAME
-            ========================== -->
+                                    <?= htmlspecialchars($sup['supplier_name']); ?>
 
-            <div class="customer-row">
+                                </option>
 
-                <div class="form-group">
+                            <?php endwhile; ?>
 
-                    <label>Barcode</label>
+                        </select>
 
-                    <input
-                        type="text"
-                        name="barcode"
-                        placeholder="Scan or Enter Barcode">
+                    </div>
 
                 </div>
 
-                <div class="form-group">
 
-                    <label>
-                        Product Name
-                        <span style="color:red">*</span>
-                    </label>
+                <!-- =========================
+                     PRODUCT NAME
+                ========================== -->
 
-                    <input
-                        type="text"
-                        name="product_name"
-                        required
-                        placeholder="Enter Product Name">
-
-                </div>
-
-            </div>
+                <div class="customer-row">
 
 
-            <!-- =========================
-                 BUYING & SELLING PRICE
-            ========================== -->
+                    <div class="form-group">
 
-            <div class="customer-row">
+                        <label>
 
-                <div class="form-group">
+                            Product Name
 
-                    <label>Buying Price</label>
+                            <span style="color:red">*</span>
 
-                    <input
-                        type="number"
-                        name="buying_price"
-                        step="0.01"
-                        min="0"
-                        required>
+                        </label>
 
-                </div>
 
-                <div class="form-group">
+                        <input
+                            type="text"
+                            name="product_name"
+                            required
+                            maxlength="150"
+                            placeholder="Enter Product Name"
+                        >
 
-                    <label>Selling Price</label>
+                    </div>
 
-                    <input
-                        type="number"
-                        name="selling_price"
-                        step="0.01"
-                        min="0"
-                        required>
+
+                    <div class="form-group">
+
+                        <label>
+                            Unit
+                        </label>
+
+
+                        <input
+                            type="text"
+                            name="unit"
+                            maxlength="50"
+                            placeholder="Piece, Box, Packet, Kg"
+                        >
+
+                    </div>
 
                 </div>
 
-            </div>
+
+                <!-- =========================
+                     BUYING & SELLING PRICE
+                ========================== -->
+
+                <div class="customer-row">
 
 
-            <!-- =========================
-                 UNIT & OPENING STOCK
-            ========================== -->
+                    <div class="form-group">
 
-            <div class="customer-row">
+                        <label>
+                            Buying Price
+                        </label>
 
-                <div class="form-group">
 
-                    <label>Unit</label>
+                        <input
+                            type="number"
+                            name="buying_price"
+                            step="0.01"
+                            min="0"
+                            required
+                            placeholder="0.00"
+                        >
 
-                    <input
-                        type="text"
-                        name="unit"
-                        placeholder="Piece, Box, Packet, Kg"
-                        required>
+                    </div>
 
-                </div>
 
-                <div class="form-group">
+                    <div class="form-group">
 
-                    <label>Opening Stock</label>
+                        <label>
+                            Selling Price
+                        </label>
 
-                    <input
-                        type="number"
-                        name="quantity"
-                        value="0"
-                        min="0"
-                        required>
 
-                </div>
+                        <input
+                            type="number"
+                            name="selling_price"
+                            step="0.01"
+                            min="0"
+                            required
+                            placeholder="0.00"
+                        >
 
-     </div>           
-                 <!-- =========================
-                 REORDER LEVEL & STATUS
-            ========================== -->
-
-            <div class="customer-row">
-
-                <div class="form-group">
-
-                    <label>Reorder Level</label>
-
-                    <input
-                        type="number"
-                        name="reorder_level"
-                        value="5"
-                        min="0"
-                        required>
+                    </div>
 
                 </div>
 
-                <div class="form-group">
 
-                    <label>Status</label>
+                <!-- =========================
+                     STOCK & REORDER LEVEL
+                ========================== -->
 
-                    <select name="status" required>
+                <div class="customer-row">
 
-                        <option value="Available" selected>
-                            Available
-                        </option>
 
-                        <option value="Out of Stock">
-                            Out of Stock
-                        </option>
+                    <div class="form-group">
 
-                    </select>
+                        <label>
+                            Opening Stock
+                        </label>
+
+
+                        <input
+                            type="number"
+                            name="quantity"
+                            value="0"
+                            min="0"
+                            required
+                        >
+
+                    </div>
+
+
+                    <div class="form-group">
+
+                        <label>
+                            Reorder Level
+                        </label>
+
+
+                        <input
+                            type="number"
+                            name="reorder_level"
+                            value="5"
+                            min="0"
+                            required
+                        >
+
+                    </div>
 
                 </div>
 
-            </div>
+
+                <!-- =========================
+                     STATUS
+                ========================== -->
+
+                <div class="customer-row">
 
 
-            <!-- =========================
-                 BUTTONS
-            ========================== -->
+                    <div class="form-group">
 
-            <div class="customer-buttons">
+                        <label>
+                            Status
+                        </label>
 
-                <button
-                    type="submit"
-                    name="save"
-                    class="customer-btn customer-save">
 
-                    <i class="fa-solid fa-floppy-disk"></i>
+                        <select
+                            name="status"
+                            required
+                        >
 
-                    Save Product
+                            <option
+                                value="Active"
+                                selected
+                            >
+                                Active
+                            </option>
 
-                </button>
 
-                <a
-                    href="index.php"
-                    class="customer-btn customer-back">
+                            <option
+                                value="Inactive"
+                            >
+                                Inactive
+                            </option>
 
-                    <i class="fa-solid fa-arrow-left"></i>
+                        </select>
 
-                    Back
+                    </div>
 
-                </a>
 
-            </div>
+                    <div class="form-group">
 
-        </form>
+                        <!-- EMPTY SPACE -->
+
+                    </div>
+
+                </div>
+
+
+                <!-- =========================
+                     BUTTONS
+                ========================== -->
+
+                <div class="customer-buttons">
+
+
+                    <button
+                        type="submit"
+                        name="save"
+                        class="customer-btn customer-save"
+                    >
+
+                        <i class="fa-solid fa-floppy-disk"></i>
+
+                        Save Product
+
+                    </button>
+
+
+                    <a
+                        href="index.php"
+                        class="customer-btn customer-back"
+                    >
+
+                        <i class="fa-solid fa-arrow-left"></i>
+
+                        Back
+
+                    </a>
+
+
+                </div>
+
+
+            </form>
+
+        </div>
 
     </div>
 
 </div>
 
-</div>
 
 </body>
 

@@ -1,26 +1,26 @@
 <?php
 
 error_reporting(E_ALL);
-ini_set('display_errors', 1);
+ini_set('display_errors', 0);
+
+header('Content-Type: application/json');
 
 require_once "../../config/session.php";
 require_once "../../config/database.php";
 require_once "../../config/permissions.php";
 
-header('Content-Type: application/json');
-
 
 /*
 |--------------------------------------------------------------------------
-| Permission
+| PERMISSION
 |--------------------------------------------------------------------------
 */
 
-if (!hasPermission('make_sales')) {
+if (!hasPermission('make_sale')) {
 
     echo json_encode([
         'success' => false,
-        'message' => 'Access Denied'
+        'message' => 'Access Denied.'
     ]);
 
     exit;
@@ -29,15 +29,17 @@ if (!hasPermission('make_sales')) {
 
 /*
 |--------------------------------------------------------------------------
-| Only POST requests
+| USER
 |--------------------------------------------------------------------------
 */
 
-if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+$userId = (int)($_SESSION['user_id'] ?? 0);
+
+if ($userId <= 0) {
 
     echo json_encode([
         'success' => false,
-        'message' => 'Invalid request method.'
+        'message' => 'User session is invalid.'
     ]);
 
     exit;
@@ -46,64 +48,70 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 
 /*
 |--------------------------------------------------------------------------
-| Read JSON
+| READ REQUEST
 |--------------------------------------------------------------------------
 */
 
-$input = json_decode(
-    file_get_contents("php://input"),
-    true
+$input = file_get_contents("php://input");
+
+$data = json_decode($input, true);
+
+if (!is_array($data)) {
+
+    echo json_encode([
+        'success' => false,
+        'message' => 'Invalid sale request.'
+    ]);
+
+    exit;
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| BASIC DATA
+|--------------------------------------------------------------------------
+*/
+
+$customerId = null;
+
+if (
+    isset($data['customer_id']) &&
+    $data['customer_id'] !== '' &&
+    $data['customer_id'] !== null
+) {
+
+    $customerId = (int)$data['customer_id'];
+
+    if ($customerId <= 0) {
+        $customerId = null;
+    }
+}
+
+
+$paymentMethod = trim(
+    $data['payment_method'] ?? ''
 );
 
 
-if (!$input) {
+$amountPaid = (float)(
+    $data['amount_paid'] ?? 0
+);
 
-    echo json_encode([
-        'success' => false,
-        'message' => 'Invalid data received.'
-    ]);
 
-    exit;
-}
+$cart = $data['cart'] ?? [];
 
 
 /*
 |--------------------------------------------------------------------------
-| Cart
+| CART VALIDATION
 |--------------------------------------------------------------------------
 */
 
-$cart = $input['cart'] ?? [];
-
-
-/*
-|--------------------------------------------------------------------------
-| Payment information
-|--------------------------------------------------------------------------
-*/
-
-$payment_method =
-    trim($input['payment_method'] ?? 'Cash');
-
-$amount_paid =
-    (float)($input['amount_paid'] ?? 0);
-
-$customer_id =
-    !empty($input['customer_id'])
-        ? (int)$input['customer_id']
-        : null;
-
-$discount =
-    (float)($input['discount'] ?? 0);
-
-
-/*
-|--------------------------------------------------------------------------
-| Validate cart
-|--------------------------------------------------------------------------
-*/
-
-if (empty($cart)) {
+if (
+    !is_array($cart) ||
+    count($cart) === 0
+) {
 
     echo json_encode([
         'success' => false,
@@ -116,19 +124,28 @@ if (empty($cart)) {
 
 /*
 |--------------------------------------------------------------------------
-| Validate payment method
+| NORMALIZE MPESA
 |--------------------------------------------------------------------------
 */
 
-$allowed_methods = [
-    'Cash',
-    'Mpesa',
-    'Credit',
-    'Installment'
-];
+if ($paymentMethod === 'Mpesa') {
+
+    $paymentMethod = 'Lipa na M-Pesa';
+
+}
 
 
-if (!in_array($payment_method, $allowed_methods, true)) {
+/*
+|--------------------------------------------------------------------------
+| PAYMENT VALIDATION
+|--------------------------------------------------------------------------
+*/
+
+if (
+    $paymentMethod !== 'Cash' &&
+    $paymentMethod !== 'Lipa na M-Pesa' &&
+    $paymentMethod !== 'Credit'
+) {
 
     echo json_encode([
         'success' => false,
@@ -141,49 +158,50 @@ if (!in_array($payment_method, $allowed_methods, true)) {
 
 /*
 |--------------------------------------------------------------------------
-| Credit / Installment requires customer
+| CREDIT FLAG
 |--------------------------------------------------------------------------
 */
 
-if (
-    ($payment_method === 'Credit' ||
-     $payment_method === 'Installment')
-    &&
-    !$customer_id
-) {
+$isCredit =
+    ($paymentMethod === 'Credit');
 
-    echo json_encode([
-        'success' => false,
-        'message' => 'Please select a customer for credit or installment sales.'
-    ]);
 
-    exit;
+/*
+|--------------------------------------------------------------------------
+| PAYMENT STATUS
+|--------------------------------------------------------------------------
+|
+| Your sales table has:
+|
+| payment_method:
+| Cash / Lipa na M-Pesa
+|
+| payment_status:
+| Paid / Partial / Credit
+|
+| Therefore a Credit sale is stored as:
+|
+| payment_method = Cash
+| payment_status = Credit
+|
+*/
+
+if ($isCredit) {
+
+    $paymentMethod = 'Cash';
+
+    $paymentStatus = 'Credit';
+
+} else {
+
+    $paymentStatus = 'Paid';
+
 }
 
 
 /*
 |--------------------------------------------------------------------------
-| Get logged-in user
-|--------------------------------------------------------------------------
-*/
-
-$user_id = $_SESSION['user_id'] ?? 0;
-
-
-if (!$user_id) {
-
-    echo json_encode([
-        'success' => false,
-        'message' => 'User session expired. Please login again.'
-    ]);
-
-    exit;
-}
-
-
-/*
-|--------------------------------------------------------------------------
-| Start database transaction
+| START TRANSACTION
 |--------------------------------------------------------------------------
 */
 
@@ -195,89 +213,228 @@ try {
 
     /*
     |--------------------------------------------------------------------------
-    | Calculate subtotal from DATABASE prices
+    | CUSTOMER VALIDATION
     |--------------------------------------------------------------------------
     */
 
-    $subtotal = 0;
+    if ($isCredit) {
 
-    $validated_items = [];
+        /*
+        | Credit must belong to a registered customer.
+        */
 
-
-    foreach ($cart as $item) {
-
-
-        $product_id =
-            (int)($item['id'] ?? 0);
-
-        $requested_qty =
-            (int)($item['qty'] ?? 0);
-
-
-        if ($product_id <= 0 || $requested_qty <= 0) {
+        if ($customerId === null) {
 
             throw new Exception(
-                "Invalid product information."
+                "Credit sales require a registered customer. " .
+                "Please select a customer."
             );
 
         }
 
 
-        /*
-        |--------------------------------------------------------------------------
-        | Lock product row while processing sale
-        |--------------------------------------------------------------------------
-        */
-
-        $stmt = mysqli_prepare(
+        $customerStmt = mysqli_prepare(
             $conn,
             "
             SELECT
                 id,
-                product_name,
-                selling_price,
-                quantity
-            FROM products
+                customer_name,
+                credit_balance
+            FROM customers
             WHERE id = ?
             FOR UPDATE
             "
         );
 
 
-        if (!$stmt) {
+        if (!$customerStmt) {
 
             throw new Exception(
-                mysqli_error($conn)
+                "Unable to validate customer."
             );
 
         }
 
 
         mysqli_stmt_bind_param(
-            $stmt,
+            $customerStmt,
             "i",
-            $product_id
+            $customerId
         );
 
 
-        mysqli_stmt_execute($stmt);
+        if (!mysqli_stmt_execute($customerStmt)) {
 
+            $error =
+                mysqli_stmt_error($customerStmt);
 
-        $result =
-            mysqli_stmt_get_result($stmt);
-
-
-        $product =
-            mysqli_fetch_assoc($result);
-
-
-        mysqli_stmt_close($stmt);
-
-
-        if (!$product) {
+            mysqli_stmt_close($customerStmt);
 
             throw new Exception(
-                "Product ID {$product_id} was not found."
+                "Customer validation failed: " . $error
+            );
+
+        }
+
+
+        $customerResult =
+            mysqli_stmt_get_result(
+                $customerStmt
+            );
+
+
+        if (
+            !$customerResult ||
+            mysqli_num_rows($customerResult) === 0
+        ) {
+
+            mysqli_stmt_close($customerStmt);
+
+            throw new Exception(
+                "Selected customer does not exist."
+            );
+
+        }
+
+
+        mysqli_stmt_close($customerStmt);
+
+    }
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | VALIDATE NORMAL CUSTOMER
+    |--------------------------------------------------------------------------
+    */
+
+    if (
+        !$isCredit &&
+        $customerId !== null
+    ) {
+
+        $customerStmt = mysqli_prepare(
+            $conn,
+            "
+            SELECT id
+            FROM customers
+            WHERE id = ?
+            LIMIT 1
+            "
+        );
+
+
+        if (!$customerStmt) {
+
+            throw new Exception(
+                "Customer validation failed."
+            );
+
+        }
+
+
+        mysqli_stmt_bind_param(
+            $customerStmt,
+            "i",
+            $customerId
+        );
+
+
+        mysqli_stmt_execute(
+            $customerStmt
+        );
+
+
+        $customerResult =
+            mysqli_stmt_get_result(
+                $customerStmt
+            );
+
+
+        if (
+            !$customerResult ||
+            mysqli_num_rows($customerResult) === 0
+        ) {
+
+            mysqli_stmt_close($customerStmt);
+
+            throw new Exception(
+                "Selected customer does not exist."
+            );
+
+        }
+
+
+        mysqli_stmt_close($customerStmt);
+
+    }
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | PRODUCT QUERY
+    |--------------------------------------------------------------------------
+    */
+
+    $productStmt = mysqli_prepare(
+        $conn,
+        "
+        SELECT
+            id,
+            product_code,
+            product_name,
+            selling_price,
+            quantity,
+            status
+        FROM products
+        WHERE id = ?
+        FOR UPDATE
+        "
+    );
+
+
+    if (!$productStmt) {
+
+        throw new Exception(
+            "Unable to prepare product validation."
+        );
+
+    }
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | BUILD SALE
+    |--------------------------------------------------------------------------
+    */
+
+    $saleItems = [];
+
+    $grandTotal = 0;
+
+
+    foreach ($cart as $item) {
+
+        $productId =
+            (int)($item['id'] ?? 0);
+
+        $requestedQuantity =
+            (int)($item['quantity'] ?? 0);
+
+
+        if ($productId <= 0) {
+
+            throw new Exception(
+                "Invalid product in cart."
+            );
+
+        }
+
+
+        if ($requestedQuantity <= 0) {
+
+            throw new Exception(
+                "Invalid product quantity."
             );
 
         }
@@ -285,21 +442,60 @@ try {
 
         /*
         |--------------------------------------------------------------------------
-        | Check stock
+        | LOCK PRODUCT
         |--------------------------------------------------------------------------
         */
 
-        $available_stock =
-            (int)$product['quantity'];
+        mysqli_stmt_bind_param(
+            $productStmt,
+            "i",
+            $productId
+        );
 
 
-        if ($requested_qty > $available_stock) {
+        if (!mysqli_stmt_execute($productStmt)) {
 
             throw new Exception(
-                $product['product_name'] .
-                " has only " .
-                $available_stock .
-                " item(s) in stock."
+                "Unable to validate product."
+            );
+
+        }
+
+
+        $productResult =
+            mysqli_stmt_get_result(
+                $productStmt
+            );
+
+
+        if (
+            !$productResult ||
+            mysqli_num_rows($productResult) === 0
+        ) {
+
+            throw new Exception(
+                "Product ID {$productId} was not found."
+            );
+
+        }
+
+
+        $product =
+            mysqli_fetch_assoc(
+                $productResult
+            );
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | ACTIVE CHECK
+        |--------------------------------------------------------------------------
+        */
+
+        if ($product['status'] !== 'Active') {
+
+            throw new Exception(
+                "Product '{$product['product_name']}' is inactive."
             );
 
         }
@@ -307,7 +503,36 @@ try {
 
         /*
         |--------------------------------------------------------------------------
-        | Use price from DATABASE
+        | STOCK CHECK
+        |--------------------------------------------------------------------------
+        */
+
+        $availableStock =
+            (int)$product['quantity'];
+
+
+        if (
+            $requestedQuantity >
+            $availableStock
+        ) {
+
+            throw new Exception(
+
+                "Insufficient stock for '" .
+                $product['product_name'] .
+                "'. Available: " .
+                $availableStock .
+                ", Requested: " .
+                $requestedQuantity
+
+            );
+
+        }
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | USE DATABASE PRICE
         |--------------------------------------------------------------------------
         */
 
@@ -315,52 +540,58 @@ try {
             (float)$product['selling_price'];
 
 
-        $item_subtotal =
-            $price * $requested_qty;
+        $subtotal =
+            round(
+                $price * $requestedQuantity,
+                2
+            );
 
 
-        $subtotal += $item_subtotal;
+        $grandTotal +=
+            $subtotal;
 
 
-        $validated_items[] = [
+        $saleItems[] = [
 
             'product_id' =>
-                $product_id,
+                $productId,
 
             'product_name' =>
                 $product['product_name'],
 
             'quantity' =>
-                $requested_qty,
+                $requestedQuantity,
 
             'price' =>
                 $price,
 
             'subtotal' =>
-                $item_subtotal
+                $subtotal
 
         ];
 
     }
 
 
+    mysqli_stmt_close(
+        $productStmt
+    );
+
+
     /*
     |--------------------------------------------------------------------------
-    | Validate discount
+    | TOTAL
     |--------------------------------------------------------------------------
     */
 
-    if ($discount < 0) {
-
-        $discount = 0;
-
-    }
+    $grandTotal =
+        round($grandTotal, 2);
 
 
-    if ($discount > $subtotal) {
+    if ($grandTotal <= 0) {
 
         throw new Exception(
-            "Discount cannot exceed subtotal."
+            "Sale total must be greater than zero."
         );
 
     }
@@ -368,292 +599,485 @@ try {
 
     /*
     |--------------------------------------------------------------------------
-    | Calculate total
+    | AMOUNT PAID
     |--------------------------------------------------------------------------
     */
 
-    $total =
-        $subtotal - $discount;
+    $amountPaid =
+        round($amountPaid, 2);
+
+
+    if ($amountPaid < 0) {
+
+        throw new Exception(
+            "Amount paid cannot be negative."
+        );
+
+    }
 
 
     /*
     |--------------------------------------------------------------------------
-    | Calculate balance
+    | PAYMENT RULES
     |--------------------------------------------------------------------------
     */
 
-    $balance =
-        $total - $amount_paid;
+    if ($isCredit) {
+
+        /*
+        | Credit supports:
+        |
+        | 0 paid       = full credit
+        | 100 paid     = partial credit
+        | total paid  = fully paid
+        |
+        */
+
+        if ($amountPaid > $grandTotal) {
+
+            throw new Exception(
+                "Amount paid cannot exceed the sale total for a credit sale."
+            );
+
+        }
 
 
-    if ($balance < 0) {
+        $balance =
+            round(
+                $grandTotal - $amountPaid,
+                2
+            );
+
+
+        /*
+        | If everything has been paid,
+        | it isn't really a credit sale.
+        */
+
+        if ($balance <= 0) {
+
+            $paymentStatus = 'Paid';
+
+        }
+
+    } else {
+
+        /*
+        | Cash / M-Pesa
+        */
+
+        if ($amountPaid <= 0) {
+
+            throw new Exception(
+                "Please enter the amount paid."
+            );
+
+        }
+
+
+        if ($amountPaid < $grandTotal) {
+
+            throw new Exception(
+                "Amount paid is less than the sale total."
+            );
+
+        }
+
 
         $balance = 0;
 
+        $paymentStatus = 'Paid';
+
     }
 
 
     /*
     |--------------------------------------------------------------------------
-    | Generate UUID
+    | INVOICE NUMBER
     |--------------------------------------------------------------------------
     */
 
-    $uuid =
-        sprintf(
-            '%04x%04x-%04x-%04x-%04x-%04x%04x%04x',
-
-            mt_rand(0, 0xffff),
-            mt_rand(0, 0xffff),
-
-            mt_rand(0, 0xffff),
-
-            mt_rand(0, 0x0fff) | 0x4000,
-
-            mt_rand(0, 0x3fff) | 0x8000,
-
-            mt_rand(0, 0xffff),
-            mt_rand(0, 0xffff),
-            mt_rand(0, 0xffff)
+    $invoiceNo =
+        'INV-' .
+        date('YmdHis') .
+        '-' .
+        strtoupper(
+            substr(
+                bin2hex(
+                    random_bytes(3)
+                ),
+                0,
+                6
+            )
         );
 
 
     /*
     |--------------------------------------------------------------------------
-    | Generate invoice number
+    | INSERT SALE
     |--------------------------------------------------------------------------
     */
 
-    $invoice_no =
-        'INV-' .
-        date('YmdHis') .
-        '-' .
-        mt_rand(100, 999);
-
-
-    /*
-    |--------------------------------------------------------------------------
-    | Insert sale
-    |--------------------------------------------------------------------------
-    */
-
-    $stmt = mysqli_prepare(
+    $saleStmt = mysqli_prepare(
         $conn,
         "
         INSERT INTO sales
         (
-            uuid,
             invoice_no,
             customer_id,
             user_id,
-            subtotal,
             total,
-            discount,
             payment_method,
+            payment_status,
             amount_paid,
-            balance,
-            status
+            balance
         )
         VALUES
-        (
-            ?,
-            ?,
-            ?,
-            ?,
-            ?,
-            ?,
-            ?,
-            ?,
-            ?,
-            ?,
-            'Completed'
-        )
+        (?, ?, ?, ?, ?, ?, ?, ?)
         "
     );
 
 
-    if (!$stmt) {
+    if (!$saleStmt) {
 
         throw new Exception(
-            mysqli_error($conn)
+            "Unable to prepare sale record."
         );
 
     }
 
 
     mysqli_stmt_bind_param(
-        $stmt,
-        "ssiiddsddd",
-
-        $uuid,
-        $invoice_no,
-        $customer_id,
-        $user_id,
-        $subtotal,
-        $total,
-        $discount,
-        $payment_method,
-        $amount_paid,
+        $saleStmt,
+        "siisssdd",
+        $invoiceNo,
+        $customerId,
+        $userId,
+        $grandTotal,
+        $paymentMethod,
+        $paymentStatus,
+        $amountPaid,
         $balance
     );
 
 
-    if (!mysqli_stmt_execute($stmt)) {
+    if (!mysqli_stmt_execute($saleStmt)) {
+
+        $error =
+            mysqli_stmt_error($saleStmt);
+
+        mysqli_stmt_close($saleStmt);
 
         throw new Exception(
-            mysqli_stmt_error($stmt)
+            "Unable to save sale: " . $error
         );
 
     }
 
 
-    $sale_id =
+    $saleId =
         mysqli_insert_id($conn);
 
 
-    mysqli_stmt_close($stmt);
+    mysqli_stmt_close($saleStmt);
 
 
     /*
     |--------------------------------------------------------------------------
-    | Insert sale items + reduce stock
+    | SALE ITEMS
     |--------------------------------------------------------------------------
     */
 
-    foreach ($validated_items as $item) {
+    $itemStmt = mysqli_prepare(
+        $conn,
+        "
+        INSERT INTO sale_items
+        (
+            sale_id,
+            product_id,
+            quantity,
+            price,
+            subtotal
+        )
+        VALUES
+        (?, ?, ?, ?, ?)
+        "
+    );
 
 
-        /*
-        |--------------------------------------------------------------------------
-        | Insert sale item
-        |--------------------------------------------------------------------------
-        */
+    if (!$itemStmt) {
 
-        $stmt = mysqli_prepare(
-            $conn,
-            "
-            INSERT INTO sale_items
-            (
-                sale_id,
-                product_id,
-                quantity,
-                price,
-                subtotal
-            )
-            VALUES
-            (
-                ?,
-                ?,
-                ?,
-                ?,
-                ?
-            )
-            "
+        throw new Exception(
+            "Unable to prepare sale item."
         );
-
-
-        if (!$stmt) {
-
-            throw new Exception(
-                mysqli_error($conn)
-            );
-
-        }
-
-
-        mysqli_stmt_bind_param(
-            $stmt,
-            "iiidd",
-
-            $sale_id,
-
-            $item['product_id'],
-
-            $item['quantity'],
-
-            $item['price'],
-
-            $item['subtotal']
-        );
-
-
-        if (!mysqli_stmt_execute($stmt)) {
-
-            throw new Exception(
-                mysqli_stmt_error($stmt)
-            );
-
-        }
-
-
-        mysqli_stmt_close($stmt);
-
-
-        /*
-        |--------------------------------------------------------------------------
-        | Reduce stock
-        |--------------------------------------------------------------------------
-        */
-
-        $stmt = mysqli_prepare(
-            $conn,
-            "
-            UPDATE products
-            SET quantity = quantity - ?
-            WHERE id = ?
-            AND quantity >= ?
-            "
-        );
-
-
-        if (!$stmt) {
-
-            throw new Exception(
-                mysqli_error($conn)
-            );
-
-        }
-
-
-        mysqli_stmt_bind_param(
-            $stmt,
-            "iii",
-
-            $item['quantity'],
-
-            $item['product_id'],
-
-            $item['quantity']
-        );
-
-
-        if (!mysqli_stmt_execute($stmt)) {
-
-            throw new Exception(
-                mysqli_stmt_error($stmt)
-            );
-
-        }
-
-
-        if (mysqli_stmt_affected_rows($stmt) !== 1) {
-
-            throw new Exception(
-                "Unable to update stock for " .
-                $item['product_name']
-            );
-
-        }
-
-
-        mysqli_stmt_close($stmt);
 
     }
 
 
     /*
     |--------------------------------------------------------------------------
-    | Commit everything
+    | STOCK UPDATE
+    |--------------------------------------------------------------------------
+    */
+
+    $stockStmt = mysqli_prepare(
+        $conn,
+        "
+        UPDATE products
+        SET quantity = quantity - ?
+        WHERE id = ?
+        AND quantity >= ?
+        "
+    );
+
+
+    if (!$stockStmt) {
+
+        mysqli_stmt_close($itemStmt);
+
+        throw new Exception(
+            "Unable to prepare stock update."
+        );
+
+    }
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | STOCK MOVEMENT
+    |--------------------------------------------------------------------------
+    */
+
+    $movementStmt = mysqli_prepare(
+        $conn,
+        "
+        INSERT INTO stock_movements
+        (
+            product_id,
+            quantity,
+            movement_type,
+            reference,
+            user_id
+        )
+        VALUES
+        (?, ?, 'OUT', ?, ?)
+        "
+    );
+
+
+    if (!$movementStmt) {
+
+        mysqli_stmt_close($itemStmt);
+        mysqli_stmt_close($stockStmt);
+
+        throw new Exception(
+            "Unable to prepare stock movement."
+        );
+
+    }
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | PROCESS ITEMS
+    |--------------------------------------------------------------------------
+    */
+
+    foreach ($saleItems as $item) {
+
+        $productId =
+            $item['product_id'];
+
+        $quantity =
+            $item['quantity'];
+
+        $price =
+            $item['price'];
+
+        $subtotal =
+            $item['subtotal'];
+
+
+        /*
+        | SALE ITEM
+        */
+
+        mysqli_stmt_bind_param(
+            $itemStmt,
+            "iiidd",
+            $saleId,
+            $productId,
+            $quantity,
+            $price,
+            $subtotal
+        );
+
+
+        if (!mysqli_stmt_execute($itemStmt)) {
+
+            throw new Exception(
+                "Unable to save sale item."
+            );
+
+        }
+
+
+        /*
+        | STOCK
+        */
+
+        mysqli_stmt_bind_param(
+            $stockStmt,
+            "iii",
+            $quantity,
+            $productId,
+            $quantity
+        );
+
+
+        if (!mysqli_stmt_execute($stockStmt)) {
+
+            throw new Exception(
+                "Unable to update stock."
+            );
+
+        }
+
+
+        if (
+            mysqli_stmt_affected_rows(
+                $stockStmt
+            ) !== 1
+        ) {
+
+            throw new Exception(
+                "Stock changed while processing the sale. Sale cancelled."
+            );
+
+        }
+
+
+        /*
+        | STOCK MOVEMENT
+        */
+
+        $reference =
+            $invoiceNo;
+
+
+        mysqli_stmt_bind_param(
+            $movementStmt,
+            "iisi",
+            $productId,
+            $quantity,
+            $reference,
+            $userId
+        );
+
+
+        if (!mysqli_stmt_execute($movementStmt)) {
+
+            throw new Exception(
+                "Unable to record stock movement."
+            );
+
+        }
+
+    }
+
+
+    mysqli_stmt_close($itemStmt);
+    mysqli_stmt_close($stockStmt);
+    mysqli_stmt_close($movementStmt);
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | UPDATE CUSTOMER CREDIT
+    |--------------------------------------------------------------------------
+    |
+    | IMPORTANT:
+    | Only the outstanding balance is added.
+    |
+    | Example:
+    |
+    | Total = 160
+    | Paid  = 100
+    | Credit = 60
+    |
+    */
+
+    if (
+        $isCredit &&
+        $balance > 0
+    ) {
+
+        $creditStmt = mysqli_prepare(
+            $conn,
+            "
+            UPDATE customers
+            SET credit_balance =
+                credit_balance + ?
+            WHERE id = ?
+            "
+        );
+
+
+        if (!$creditStmt) {
+
+            throw new Exception(
+                "Unable to prepare customer credit update."
+            );
+
+        }
+
+
+        mysqli_stmt_bind_param(
+            $creditStmt,
+            "di",
+            $balance,
+            $customerId
+        );
+
+
+        if (!mysqli_stmt_execute($creditStmt)) {
+
+            $error =
+                mysqli_stmt_error($creditStmt);
+
+            mysqli_stmt_close($creditStmt);
+
+            throw new Exception(
+                "Unable to update customer credit balance: " .
+                $error
+            );
+
+        }
+
+
+        if (
+            mysqli_stmt_affected_rows(
+                $creditStmt
+            ) !== 1
+        ) {
+
+            mysqli_stmt_close($creditStmt);
+
+            throw new Exception(
+                "Customer credit balance could not be updated."
+            );
+
+        }
+
+
+        mysqli_stmt_close($creditStmt);
+
+    }
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | COMMIT
     |--------------------------------------------------------------------------
     */
 
@@ -662,48 +1086,56 @@ try {
 
     /*
     |--------------------------------------------------------------------------
-    | Success
+    | SUCCESS
     |--------------------------------------------------------------------------
     */
 
     echo json_encode([
 
-        'success' => true,
+        'success' =>
+            true,
 
         'message' =>
-            'Sale completed successfully.',
+            $isCredit
+                ? 'Credit sale completed successfully.'
+                : 'Sale completed successfully.',
 
         'sale_id' =>
-            $sale_id,
+            $saleId,
 
         'invoice_no' =>
-            $invoice_no,
-
-        'subtotal' =>
-            number_format($subtotal, 2, '.', ''),
-
-        'discount' =>
-            number_format($discount, 2, '.', ''),
+            $invoiceNo,
 
         'total' =>
-            number_format($total, 2, '.', ''),
+            number_format(
+                $grandTotal,
+                2,
+                '.',
+                ''
+            ),
 
         'amount_paid' =>
-            number_format($amount_paid, 2, '.', ''),
+            number_format(
+                $amountPaid,
+                2,
+                '.',
+                ''
+            ),
 
         'balance' =>
-    number_format($balance, 2, '.', ''),
+            number_format(
+                $balance,
+                2,
+                '.',
+                ''
+            ),
 
-'change' =>
-    number_format(
-        max(0, $amount_paid - $total),
-        2,
-        '.',
-        ''
-    )
-            
+        'payment_status' =>
+            $paymentStatus
 
     ]);
+
+    exit;
 
 
 } catch (Throwable $e) {
@@ -711,21 +1143,30 @@ try {
 
     /*
     |--------------------------------------------------------------------------
-    | Rollback
+    | ROLLBACK
     |--------------------------------------------------------------------------
     */
 
     mysqli_rollback($conn);
 
 
+    error_log(
+        "RNR SALE ERROR: " .
+        $e->getMessage()
+    );
+
+
     echo json_encode([
 
-        'success' => false,
+        'success' =>
+            false,
 
         'message' =>
             $e->getMessage()
 
     ]);
+
+    exit;
 
 }
 

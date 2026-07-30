@@ -7,43 +7,74 @@ require_once "../config/session.php";
 require_once "../config/database.php";
 require_once "../config/permissions.php";
 
+
 /*
 |--------------------------------------------------------------------------
-| Cashier Access
+| CASHIER ACCESS
 |--------------------------------------------------------------------------
 */
 
-if (!hasPermission('make_sales')) {
+if (!hasPermission('make_sale')) {
     die("Access Denied");
 }
 
+
 /*
 |--------------------------------------------------------------------------
-| Dashboard Statistics
+| DASHBOARD STATISTICS
 |--------------------------------------------------------------------------
 */
 
-// Total Products
+
+/*
+|--------------------------------------------------------------------------
+| TOTAL PRODUCTS
+|--------------------------------------------------------------------------
+*/
+
 $productQuery = mysqli_query(
     $conn,
-    "SELECT COUNT(*) AS total FROM products"
+    "SELECT COUNT(*) AS total
+     FROM products
+     WHERE status = 'Active'"
 );
 
+if (!$productQuery) {
+    die("Product Query Error: " . mysqli_error($conn));
+}
+
 $product = mysqli_fetch_assoc($productQuery);
+
 $totalProducts = $product['total'] ?? 0;
 
 
-// Total Customers
+/*
+|--------------------------------------------------------------------------
+| TOTAL CUSTOMERS
+|--------------------------------------------------------------------------
+*/
+
 $customerQuery = mysqli_query(
     $conn,
-    "SELECT COUNT(*) AS total FROM customers"
+    "SELECT COUNT(*) AS total
+     FROM customers"
 );
 
+if (!$customerQuery) {
+    die("Customer Query Error: " . mysqli_error($conn));
+}
+
 $customer = mysqli_fetch_assoc($customerQuery);
+
 $totalCustomers = $customer['total'] ?? 0;
 
 
-// Today's Sales
+/*
+|--------------------------------------------------------------------------
+| TODAY'S SALES
+|--------------------------------------------------------------------------
+*/
+
 $salesQuery = mysqli_query(
     $conn,
     "SELECT IFNULL(SUM(total), 0) AS total
@@ -51,11 +82,21 @@ $salesQuery = mysqli_query(
      WHERE DATE(sale_date) = CURDATE()"
 );
 
+if (!$salesQuery) {
+    die("Sales Query Error: " . mysqli_error($conn));
+}
+
 $sales = mysqli_fetch_assoc($salesQuery);
+
 $todaySales = $sales['total'] ?? 0;
 
 
-// Today's Transactions
+/*
+|--------------------------------------------------------------------------
+| TODAY'S TRANSACTIONS
+|--------------------------------------------------------------------------
+*/
+
 $transactionQuery = mysqli_query(
     $conn,
     "SELECT COUNT(*) AS total
@@ -63,12 +104,24 @@ $transactionQuery = mysqli_query(
      WHERE DATE(sale_date) = CURDATE()"
 );
 
-$transactions = mysqli_fetch_assoc($transactionQuery);
-$todayTransactions = $transactions['total'] ?? 0;
+if (!$transactionQuery) {
+    die(
+        "Transaction Query Error: " .
+        mysqli_error($conn)
+    );
+}
+
+$transactions =
+    mysqli_fetch_assoc($transactionQuery);
+
+$todayTransactions =
+    $transactions['total'] ?? 0;
 
 ?>
 
+
 <!DOCTYPE html>
+
 <html lang="en">
 
 <head>
@@ -80,7 +133,10 @@ $todayTransactions = $transactions['total'] ?? 0;
     content="width=device-width, initial-scale=1.0"
 >
 
-<title>Cashier Dashboard | R&R Collection POS</title>
+<title>
+Cashier Dashboard | R&R Collection POS
+</title>
+
 
 <link
     rel="stylesheet"
@@ -97,10 +153,12 @@ $todayTransactions = $transactions['total'] ?? 0;
     href="../assets/css/forms.css"
 >
 
+
 <link
     rel="stylesheet"
     href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css"
 >
+
 
 </head>
 
@@ -120,23 +178,41 @@ $todayTransactions = $transactions['total'] ?? 0;
 <div class="container">
 
 
-<!-- PAGE TITLE -->
+<!-- =====================================================
+     PAGE TITLE
+====================================================== -->
 
 <div class="page-title">
 
-<h1>Cashier Dashboard</h1>
+<h1>
+
+<i class="fa-solid fa-cash-register"></i>
+
+Cashier Dashboard
+
+</h1>
+
 
 <p>
+
 Welcome back,
+
 <strong>
-<?= htmlspecialchars($_SESSION['fullname']); ?>
+
+<?= htmlspecialchars(
+    $_SESSION['fullname']
+); ?>
+
 </strong>
+
 </p>
 
 </div>
 
 
-<!-- DASHBOARD CARDS -->
+<!-- =====================================================
+     DASHBOARD CARDS
+====================================================== -->
 
 <div class="cards">
 
@@ -147,13 +223,16 @@ Welcome back,
 
 <div>
 
-<small>Products</small>
+<small>
+Products
+</small>
 
 <h2>
-<?= $totalProducts; ?>
+<?= (int)$totalProducts; ?>
 </h2>
 
 </div>
+
 
 <div class="card-icon blue">
 
@@ -170,13 +249,16 @@ Welcome back,
 
 <div>
 
-<small>Customers</small>
+<small>
+Customers
+</small>
 
 <h2>
-<?= $totalCustomers; ?>
+<?= (int)$totalCustomers; ?>
 </h2>
 
 </div>
+
 
 <div class="card-icon green">
 
@@ -193,13 +275,16 @@ Welcome back,
 
 <div>
 
-<small>Today's Transactions</small>
+<small>
+Today's Transactions
+</small>
 
 <h2>
-<?= $todayTransactions; ?>
+<?= (int)$todayTransactions; ?>
 </h2>
 
 </div>
+
 
 <div class="card-icon orange">
 
@@ -216,13 +301,22 @@ Welcome back,
 
 <div>
 
-<small>Today's Sales</small>
+<small>
+Today's Sales
+</small>
 
 <h2>
-KSh <?= number_format($todaySales, 2); ?>
+
+KSh
+<?= number_format(
+    (float)$todaySales,
+    2
+); ?>
+
 </h2>
 
 </div>
+
 
 <div class="card-icon red">
 
@@ -236,9 +330,12 @@ KSh <?= number_format($todaySales, 2); ?>
 </div>
 
 
-<!-- QUICK ACTIONS -->
+<!-- =====================================================
+     QUICK ACTIONS
+====================================================== -->
 
 <div class="panel">
+
 
 <h3>
 
@@ -251,29 +348,51 @@ Quick Actions
 
 <table>
 
+
+<thead>
+
 <tr>
 
-<th>Module</th>
+<th>
+Module
+</th>
 
-<th>Action</th>
+<th>
+Action
+</th>
 
 </tr>
 
+</thead>
+
+
+<tbody>
+
+
+<!-- =================================================
+     NEW SALE
+================================================== -->
 
 <tr>
 
 <td>
+
 New Sale
+
 </td>
+
 
 <td>
 
 <a
-    href="sales/create.php"
+    href="../admin/sales/index.php"
     class="btn"
 >
-    <i class="fa-solid fa-cart-shopping"></i>
-    New Sale
+
+<i class="fa-solid fa-cart-shopping"></i>
+
+New Sale
+
 </a>
 
 </td>
@@ -281,20 +400,30 @@ New Sale
 </tr>
 
 
+<!-- =================================================
+     CUSTOMERS
+================================================== -->
+
 <tr>
 
 <td>
+
 Customers
+
 </td>
+
 
 <td>
 
 <a
-    href="customers.php"
+    href="../admin/customers/index.php"
     class="btn"
 >
-    <i class="fa-solid fa-users"></i>
-    Customers
+
+<i class="fa-solid fa-users"></i>
+
+Customers
+
 </a>
 
 </td>
@@ -302,54 +431,79 @@ Customers
 </tr>
 
 
+<!-- =================================================
+     PRODUCTS
+================================================== -->
+
 <tr>
 
 <td>
+
 Products
+
 </td>
+
 
 <td>
 
 <a
-    href="products.php"
+    href="../admin/products/index.php"
     class="btn"
 >
-    <i class="fa-solid fa-box-open"></i>
-    Find Product
+
+<i class="fa-solid fa-box-open"></i>
+
+Find Product
+
 </a>
 
 </td>
 
 </tr>
 
+
+<!-- =================================================
+     SALES HISTORY
+================================================== -->
 
 <tr>
 
 <td>
+
 Today's Sales
+
 </td>
+
 
 <td>
 
 <a
-    href="sales/index.php"
+    href="../admin/sales/index.php"
     class="btn"
 >
-    <i class="fa-solid fa-receipt"></i>
-    View Sales
+
+<i class="fa-solid fa-receipt"></i>
+
+View Sales
+
 </a>
 
 </td>
 
 </tr>
+
+
+</tbody>
 
 
 </table>
 
+
 </div>
 
 
 </div>
+
 
 </div>
 

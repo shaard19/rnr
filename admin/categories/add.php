@@ -1,4 +1,5 @@
 <?php
+
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
@@ -10,97 +11,210 @@ if (!hasPermission('add_category')) {
     die("Access Denied");
 }
 
-/* Load Departments */
+$error = '';
+
+/*
+|--------------------------------------------------------------------------
+| Load Departments
+|--------------------------------------------------------------------------
+*/
+
 $departments = mysqli_query(
     $conn,
     "SELECT id, department_name
      FROM departments
-     WHERE status='Active'
+     WHERE status = 'Active'
      ORDER BY department_name ASC"
 );
 
+if (!$departments) {
+    die("Department Query Error: " . mysqli_error($conn));
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| Save Category
+|--------------------------------------------------------------------------
+*/
+
 if (isset($_POST['save'])) {
 
-    $department_id = (int)$_POST['department_id'];
-    $category_name = trim($_POST['category_name']);
-    $category_code = strtoupper(trim($_POST['category_code']));
-    $description   = trim($_POST['description']);
-    $status        = $_POST['status'];
+    $department_id = (int)($_POST['department_id'] ?? 0);
 
-    /* Duplicate Category Name */
-    $check = mysqli_prepare(
-        $conn,
-        "SELECT id FROM categories WHERE category_name=?"
+    $category_name = trim(
+        $_POST['category_name'] ?? ''
     );
 
-    mysqli_stmt_bind_param($check, "s", $category_name);
-    mysqli_stmt_execute($check);
-    $result = mysqli_stmt_get_result($check);
+    $description = trim(
+        $_POST['description'] ?? ''
+    );
 
-    if (mysqli_num_rows($result) > 0) {
+    $status = $_POST['status'] ?? 'Active';
 
-        $error = "Category already exists.";
+
+    /*
+    |--------------------------------------------------------------------------
+    | Validation
+    |--------------------------------------------------------------------------
+    */
+
+    if ($department_id <= 0) {
+
+        $error = "Please select a department.";
+
+    } elseif ($category_name === '') {
+
+        $error = "Category name is required.";
 
     } else {
 
-        $sql = mysqli_prepare(
+
+        /*
+        |--------------------------------------------------------------------------
+        | Check Duplicate Category
+        |--------------------------------------------------------------------------
+        */
+
+        $check = mysqli_prepare(
             $conn,
-            "INSERT INTO categories
-            (
-                department_id,
-                category_name,
-                category_code,
-                description,
-                status
-            )
-            VALUES
-            (?,?,?,?,?)"
+            "SELECT id
+             FROM categories
+             WHERE category_name = ?
+             LIMIT 1"
         );
 
-        mysqli_stmt_bind_param(
-            $sql,
-            "issss",
-            $department_id,
-            $category_name,
-            $category_code,
-            $description,
-            $status
-        );
-
-        if(mysqli_stmt_execute($sql)){
-
-            header("Location: index.php");
-            exit();
-
-        }else{
-
-            $error = mysqli_error($conn);
-
+        if (!$check) {
+            die(
+                "Duplicate Check Error: " .
+                mysqli_error($conn)
+            );
         }
 
-    }
+        mysqli_stmt_bind_param(
+            $check,
+            "s",
+            $category_name
+        );
 
+        mysqli_stmt_execute($check);
+
+        $result = mysqli_stmt_get_result($check);
+
+
+        if (mysqli_num_rows($result) > 0) {
+
+            $error = "Category already exists.";
+
+        } else {
+
+
+            /*
+            |--------------------------------------------------------------------------
+            | Insert Category
+            |--------------------------------------------------------------------------
+            */
+
+            $stmt = mysqli_prepare(
+                $conn,
+                "INSERT INTO categories
+                (
+                    category_name,
+                    department_id,
+                    description,
+                    status
+                )
+                VALUES (?, ?, ?, ?)"
+            );
+
+
+            if (!$stmt) {
+
+                die(
+                    "Category Prepare Error: " .
+                    mysqli_error($conn)
+                );
+
+            }
+
+
+            mysqli_stmt_bind_param(
+                $stmt,
+                "siss",
+                $category_name,
+                $department_id,
+                $description,
+                $status
+            );
+
+
+            /*
+            |--------------------------------------------------------------------------
+            | Execute
+            |--------------------------------------------------------------------------
+            */
+
+            if (mysqli_stmt_execute($stmt)) {
+
+                header("Location: index.php");
+                exit();
+
+            } else {
+
+                $error =
+                    "Unable to save category: " .
+                    mysqli_stmt_error($stmt);
+
+            }
+
+
+            mysqli_stmt_close($stmt);
+        }
+
+
+        mysqli_stmt_close($check);
+    }
 }
+
 ?>
 
 <!DOCTYPE html>
+
 <html lang="en">
 
 <head>
 
 <meta charset="UTF-8">
 
-<meta name="viewport"
-content="width=device-width, initial-scale=1.0">
+<meta
+name="viewport"
+content="width=device-width, initial-scale=1.0"
 
-<title>Add Category | R&R Collection POS</title>
+>
 
-<link rel="stylesheet" href="../../assets/css/dashboard.css">
-<link rel="stylesheet" href="../../assets/css/sidebar.css">
-<link rel="stylesheet" href="../../assets/css/form.css">
+<title>
+Add Category | R&R Collection POS
+</title>
 
-<link rel="stylesheet"
-href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
+<link
+    rel="stylesheet"
+    href="../../assets/css/dashboard.css"
+>
+
+<link
+    rel="stylesheet"
+    href="../../assets/css/sidebar.css"
+>
+
+<link
+    rel="stylesheet"
+    href="../../assets/css/form.css"
+>
+
+<link
+    rel="stylesheet"
+    href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css"
+>
 
 </head>
 
@@ -124,21 +238,29 @@ Add Category
 
 </h1>
 
-<p>Create a new inventory category.</p>
+<p>
+Create a new inventory category.
+</p>
 
 </div>
 
 <div class="customer-panel">
 
-<?php
-if(isset($error)){
-?>
+<?php if ($error !== ''): ?>
+
 <div class="error-message">
-<?= $error; ?>
+
+<?= htmlspecialchars($error); ?>
+
 </div>
-<?php } ?>
+
+<?php endif; ?>
 
 <form method="POST">
+
+<!-- =====================================================
+     DEPARTMENT + CATEGORY NAME
+====================================================== -->
 
 <div class="customer-row">
 
@@ -147,23 +269,40 @@ if(isset($error)){
 <label>
 
 Department
+
 <span class="required">*</span>
 
 </label>
 
-<select name="department_id" required>
+<select
+name="department_id"
+required
 
-<option value="">Select Department</option>
+>
 
-<?php while($department=mysqli_fetch_assoc($departments)){ ?>
+<option value="">
+Select Department
+</option>
 
-<option value="<?= $department['id']; ?>">
+<?php while (
+    $department = mysqli_fetch_assoc($departments)
+): ?>
 
-<?= htmlspecialchars($department['department_name']); ?>
+<option
+    value="<?= $department['id']; ?>"
+    <?= (
+        isset($_POST['department_id']) &&
+        $_POST['department_id'] == $department['id']
+    ) ? 'selected' : ''; ?>
+>
+
+<?= htmlspecialchars(
+    $department['department_name']
+); ?>
 
 </option>
 
-<?php } ?>
+<?php endwhile; ?>
 
 </select>
 
@@ -173,29 +312,8 @@ Department
 
 <label>
 
-Category Code
-<span class="required">*</span>
-
-</label>
-
-<input
-type="text"
-name="category_code"
-placeholder="MJKT"
-maxlength="10"
-required>
-
-</div>
-
-</div>
-
-<div class="customer-row">
-
-<div class="form-group">
-
-<label>
-
 Category Name
+
 <span class="required">*</span>
 
 </label>
@@ -203,21 +321,65 @@ Category Name
 <input
 type="text"
 name="category_name"
-required>
+placeholder="Enter category name"
+value="<?= htmlspecialchars(
+     $_POST['category_name'] ?? ''
+ ); ?>"
+required
+
+>
 
 </div>
 
+</div>
+
+<!-- =====================================================
+     DESCRIPTION
+====================================================== -->
+
 <div class="form-group">
 
-<label>Status</label>
+<label>
+Description
+</label>
+
+<textarea
+    name="description"
+    rows="4"
+    placeholder="Enter category description"
+><?= htmlspecialchars(
+    $_POST['description'] ?? ''
+); ?></textarea>
+
+</div>
+
+<!-- =====================================================
+     STATUS
+====================================================== -->
+
+<div class="form-group">
+
+<label>
+Status
+</label>
 
 <select name="status">
 
-<option value="Active">
+<option
+    value="Active"
+    <?= (
+        ($_POST['status'] ?? 'Active') === 'Active'
+    ) ? 'selected' : ''; ?>
+>
 Active
 </option>
 
-<option value="Inactive">
+<option
+    value="Inactive"
+    <?= (
+        ($_POST['status'] ?? '') === 'Inactive'
+    ) ? 'selected' : ''; ?>
+>
 Inactive
 </option>
 
@@ -225,24 +387,18 @@ Inactive
 
 </div>
 
-</div>
-
-<div class="form-group">
-
-<label>Description</label>
-
-<textarea
-name="description"
-rows="4"></textarea>
-
-</div>
+<!-- =====================================================
+     BUTTONS
+====================================================== -->
 
 <div class="customer-buttons">
 
 <button
 type="submit"
 name="save"
-class="customer-btn customer-save">
+class="customer-btn customer-save"
+
+>
 
 <i class="fa-solid fa-floppy-disk"></i>
 
@@ -252,7 +408,9 @@ Save Category
 
 <a
 href="index.php"
-class="customer-btn customer-back">
+class="customer-btn customer-back"
+
+>
 
 <i class="fa-solid fa-arrow-left"></i>
 
