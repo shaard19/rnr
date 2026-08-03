@@ -1,4 +1,3 @@
-
 <?php
 
 error_reporting(E_ALL);
@@ -69,14 +68,6 @@ if (!$customers) {
 |--------------------------------------------------------------------------
 | LOAD PRODUCTS
 |--------------------------------------------------------------------------
-|
-| IMPORTANT:
-| Products table uses:
-| Active / Inactive
-|
-| It does NOT use:
-| Available / Out of Stock
-|
 */
 
 $products = mysqli_query(
@@ -118,9 +109,6 @@ if (!$products) {
     >
 
     <title>POS - R&R Collection</title>
-
-
-    <!-- POS CSS -->
 
     <link
         rel="stylesheet"
@@ -176,19 +164,15 @@ if (!$products) {
             Customer
         </label>
 
-
         <select id="customer">
 
             <option value="">
                 Walk In Customer
             </option>
 
-
             <?php while ($row = mysqli_fetch_assoc($customers)): ?>
 
-                <option
-                    value="<?= (int)$row['id']; ?>"
-                >
+                <option value="<?= (int)$row['id']; ?>">
 
                     <?= htmlspecialchars(
                         $row['customer_name']
@@ -216,16 +200,11 @@ if (!$products) {
 
         <div class="products-section">
 
-
-            <!-- CATEGORIES -->
-
             <h3>
                 Categories
             </h3>
 
-
             <div class="categories">
-
 
                 <?php while ($cat = mysqli_fetch_assoc($categories)): ?>
 
@@ -243,11 +222,8 @@ if (!$products) {
 
                 <?php endwhile; ?>
 
-
             </div>
 
-
-            <!-- PRODUCTS -->
 
             <h3>
                 Products
@@ -259,12 +235,9 @@ if (!$products) {
                 id="products"
             >
 
-
                 <?php if (mysqli_num_rows($products) > 0): ?>
 
-
                     <?php while ($product = mysqli_fetch_assoc($products)): ?>
-
 
                         <div
                             class="product-card"
@@ -280,9 +253,6 @@ if (!$products) {
                             ); ?>"
                         >
 
-
-                            <!-- PRODUCT IMAGE -->
-
                             <?php if (!empty($product['image'])): ?>
 
                                 <img
@@ -297,8 +267,6 @@ if (!$products) {
                             <?php endif; ?>
 
 
-                            <!-- PRODUCT CODE -->
-
                             <small>
 
                                 <?= htmlspecialchars(
@@ -308,8 +276,6 @@ if (!$products) {
                             </small>
 
 
-                            <!-- PRODUCT NAME -->
-
                             <h4>
 
                                 <?= htmlspecialchars(
@@ -318,8 +284,6 @@ if (!$products) {
 
                             </h4>
 
-
-                            <!-- PRICE -->
 
                             <p>
 
@@ -331,8 +295,6 @@ if (!$products) {
 
                             </p>
 
-
-                            <!-- STOCK -->
 
                             <p>
 
@@ -350,8 +312,6 @@ if (!$products) {
                             </p>
 
 
-                            <!-- ADD TO CART -->
-
                             <button
                                 type="button"
                                 class="add-cart"
@@ -367,26 +327,19 @@ if (!$products) {
 
                             </button>
 
-
                         </div>
-
 
                     <?php endwhile; ?>
 
-
                 <?php else: ?>
-
 
                     <p>
                         No active products found.
                     </p>
 
-
                 <?php endif; ?>
 
-
             </div>
-
 
         </div>
 
@@ -396,7 +349,6 @@ if (!$products) {
         ================================================== -->
 
         <div class="cart-section">
-
 
             <h3>
                 Cart
@@ -409,24 +361,11 @@ if (!$products) {
 
                     <tr>
 
-                        <th>
-                            Product
-                        </th>
-
-                        <th>
-                            Qty
-                        </th>
-
-                        <th>
-                            Price
-                        </th>
-
-                        <th>
-                            Total
-                        </th>
-
-                        <th>
-                        </th>
+                        <th>Product</th>
+                        <th>Qty</th>
+                        <th>Price</th>
+                        <th>Total</th>
+                        <th></th>
 
                     </tr>
 
@@ -437,7 +376,6 @@ if (!$products) {
 
                 </tbody>
 
-
             </table>
 
 
@@ -446,7 +384,6 @@ if (!$products) {
             ================================================== -->
 
             <div class="totals">
-
 
                 <p>
 
@@ -482,7 +419,6 @@ if (!$products) {
 
                 </h2>
 
-
             </div>
 
 
@@ -492,11 +428,12 @@ if (!$products) {
 
             <div class="payment">
 
-
                 <h3>
                     Payment
                 </h3>
 
+
+                <!-- CASH -->
 
                 <label>
 
@@ -512,18 +449,22 @@ if (!$products) {
                 </label>
 
 
+                <!-- MPESA -->
+
                 <label>
 
                     <input
                         type="radio"
                         name="payment"
-                        value="Mpesa"
+                        value="Lipa na M-Pesa"
                     >
 
-                    M-Pesa
+                    Lipa na M-Pesa
 
                 </label>
 
+
+                <!-- CREDIT -->
 
                 <label>
 
@@ -538,9 +479,122 @@ if (!$products) {
                 </label>
 
 
-                <br>
-                <br>
+                <!-- =================================================
+                     MPESA SECTION
+                ================================================== -->
 
+                <div
+                    id="mpesa-section"
+                    style="display:none; margin-top:15px;"
+                >
+
+                    <h4>
+                        M-Pesa Payment
+                    </h4>
+
+
+                    <!-- STK PUSH -->
+
+                    <label>
+
+                        <input
+                            type="radio"
+                            name="mpesa_mode"
+                            value="STK_PUSH"
+                            checked
+                        >
+
+                        Send STK Push
+
+                    </label>
+
+
+                    <!-- DIRECT TILL -->
+
+                    <label>
+
+                        <input
+                            type="radio"
+                            name="mpesa_mode"
+                            value="DIRECT_TILL"
+                        >
+
+                        Customer Paid Directly to Till
+
+                    </label>
+
+
+                    <!-- =================================================
+                         STK PUSH DETAILS
+                    ================================================== -->
+
+                    <div
+                        id="stk-section"
+                        style="margin-top:10px;"
+                    >
+
+                        <label for="mpesa-phone">
+
+                            Customer M-Pesa Number
+
+                        </label>
+
+                        <input
+                            type="tel"
+                            id="mpesa-phone"
+                            placeholder="0712345678"
+                            autocomplete="off"
+                        >
+
+                        <small>
+
+                            The M-Pesa prompt will be sent
+                            to this number.
+
+                        </small>
+
+                    </div>
+
+
+                    <!-- =================================================
+                         DIRECT TILL DETAILS
+                    ================================================== -->
+
+                    <div
+                        id="direct-till-section"
+                        style="display:none; margin-top:10px;"
+                    >
+
+                        <label for="mpesa-transaction-code">
+
+                            M-Pesa Transaction Code
+
+                        </label>
+
+                        <input
+                            type="text"
+                            id="mpesa-transaction-code"
+                            placeholder="e.g. DFG74754GH"
+                            maxlength="50"
+                            autocomplete="off"
+                        >
+
+                        <small>
+
+                            Enter the transaction code
+                            shown on the customer's M-Pesa
+                            confirmation.
+
+                        </small>
+
+                    </div>
+
+                </div>
+
+
+                <!-- =================================================
+                     AMOUNT PAID
+                ================================================== -->
 
                 <input
                     type="number"
@@ -574,25 +628,17 @@ if (!$products) {
 
                 </button>
 
-
             </div>
-
 
         </div>
 
-
     </div>
-
 
 </div>
 
 
-<!-- SALES JAVASCRIPT -->
-
-<script src="../../assets/js/sales.js?v=3"></script>
-
+<script src="../../assets/js/sales.js?v=4"></script>
 
 </body>
 
 </html>
-```

@@ -348,3 +348,20 @@
     color: #374151;
     background: #ffffff;
 }
+.export-excel-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 16px;
+    background: #16a34a;
+    color: #fff;
+    text-decoration: none;
+    border-radius: 8px;
+    font-weight: 600;
+    transition: 0.2s ease;
+}
+
+.export-excel-btn:hover {
+    background: #15803d;
+    transform: translateY(-1px);
+}

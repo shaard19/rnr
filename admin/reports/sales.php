@@ -7,7 +7,6 @@ require_once "../../config/session.php";
 require_once "../../config/database.php";
 require_once "../../config/permissions.php";
 
-
 /*
 |--------------------------------------------------------------------------
 | PERMISSION
@@ -18,7 +17,6 @@ if (!hasPermission('view_reports')) {
     die("Access Denied");
 }
 
-
 /*
 |--------------------------------------------------------------------------
 | FILTERS
@@ -28,7 +26,62 @@ if (!hasPermission('view_reports')) {
 $from = $_GET['from'] ?? date('Y-m-d');
 $to = $_GET['to'] ?? date('Y-m-d');
 $payment = $_GET['payment'] ?? '';
+$status = $_GET['status'] ?? '';
 
+/*
+|--------------------------------------------------------------------------
+| VALIDATE DATES
+|--------------------------------------------------------------------------
+*/
+
+$fromDate = DateTime::createFromFormat('Y-m-d', $from);
+$toDate = DateTime::createFromFormat('Y-m-d', $to);
+
+if (
+    !$fromDate ||
+    !$toDate ||
+    $fromDate->format('Y-m-d') !== $from ||
+    $toDate->format('Y-m-d') !== $to
+) {
+    die("Invalid date range.");
+}
+
+if ($from > $to) {
+    die("From date cannot be later than To date.");
+}
+
+/*
+|--------------------------------------------------------------------------
+| VALID PAYMENT METHODS
+|--------------------------------------------------------------------------
+*/
+
+$allowedPayments = [
+    '',
+    'Cash',
+    'Lipa na M-Pesa'
+];
+
+if (!in_array($payment, $allowedPayments, true)) {
+    die("Invalid payment method.");
+}
+
+/*
+|--------------------------------------------------------------------------
+| VALID PAYMENT STATUS
+|--------------------------------------------------------------------------
+*/
+
+$allowedStatuses = [
+    '',
+    'Paid',
+    'Partial',
+    'Credit'
+];
+
+if (!in_array($status, $allowedStatuses, true)) {
+    die("Invalid payment status.");
+}
 
 /*
 |--------------------------------------------------------------------------
@@ -36,9 +89,15 @@ $payment = $_GET['payment'] ?? '';
 |--------------------------------------------------------------------------
 */
 
-$from = mysqli_real_escape_string($conn, $from);
-$to = mysqli_real_escape_string($conn, $to);
+$fromEscaped = mysqli_real_escape_string(
+    $conn,
+    $from
+);
 
+$toEscaped = mysqli_real_escape_string(
+    $conn,
+    $to
+);
 
 /*
 |--------------------------------------------------------------------------
@@ -48,31 +107,49 @@ $to = mysqli_real_escape_string($conn, $to);
 
 $conditions = [];
 
-$conditions[] = "DATE(s.sale_date) BETWEEN '$from' AND '$to'";
+$conditions[] = "
+    DATE(s.sale_date)
+    BETWEEN '$fromEscaped' AND '$toEscaped'
+";
 
-$conditions = [];
-
-$conditions[] = "DATE(s.sale_date) BETWEEN '$from' AND '$to'";
-
-if ($payment !== '') {
-    $payment = mysqli_real_escape_string($conn, $payment);
-    $conditions[] = "s.payment_method = '$payment'";
-}
-
-$where = implode(" AND ", $conditions);
-
+/*
+|--------------------------------------------------------------------------
+| PAYMENT FILTER
+|--------------------------------------------------------------------------
+*/
 
 if ($payment !== '') {
 
-    $payment = mysqli_real_escape_string($conn, $payment);
+    $paymentEscaped = mysqli_real_escape_string(
+        $conn,
+        $payment
+    );
 
-    $conditions[] = "s.payment_method = '$payment'";
-
+    $conditions[] =
+        "s.payment_method = '$paymentEscaped'";
 }
 
+/*
+|--------------------------------------------------------------------------
+| STATUS FILTER
+|--------------------------------------------------------------------------
+*/
 
-$where = implode(" AND ", $conditions);
+if ($status !== '') {
 
+    $statusEscaped = mysqli_real_escape_string(
+        $conn,
+        $status
+    );
+
+    $conditions[] =
+        "s.payment_status = '$statusEscaped'";
+}
+
+$where = implode(
+    " AND ",
+    $conditions
+);
 
 /*
 |--------------------------------------------------------------------------
@@ -80,17 +157,26 @@ $where = implode(" AND ", $conditions);
 |--------------------------------------------------------------------------
 */
 
-$summary_sql = "
+$summarySql = "
 
     SELECT
 
         COUNT(*) AS transactions,
 
-        COALESCE(SUM(s.total), 0) AS total,
+        COALESCE(
+            SUM(s.total),
+            0
+        ) AS total,
 
-        COALESCE(SUM(s.amount_paid), 0) AS paid,
+        COALESCE(
+            SUM(s.amount_paid),
+            0
+        ) AS paid,
 
-        COALESCE(SUM(s.balance), 0) AS balance
+        COALESCE(
+            SUM(s.balance),
+            0
+        ) AS balance
 
     FROM sales s
 
@@ -98,22 +184,22 @@ $summary_sql = "
 
 ";
 
+$summaryResult = mysqli_query(
+    $conn,
+    $summarySql
+);
 
-$summary_result = mysqli_query($conn, $summary_sql);
-
-
-if (!$summary_result) {
+if (!$summaryResult) {
 
     die(
-        "SUMMARY SQL ERROR: "
-        . mysqli_error($conn)
+        "SUMMARY SQL ERROR: " .
+        mysqli_error($conn)
     );
-
 }
 
-
-$summary = mysqli_fetch_assoc($summary_result);
-
+$summary = mysqli_fetch_assoc(
+    $summaryResult
+);
 
 /*
 |--------------------------------------------------------------------------
@@ -121,7 +207,7 @@ $summary = mysqli_fetch_assoc($summary_result);
 |--------------------------------------------------------------------------
 */
 
-$sales_sql = "
+$salesSql = "
 
     SELECT
 
@@ -132,6 +218,8 @@ $sales_sql = "
         s.total,
 
         s.payment_method,
+
+        s.payment_status,
 
         s.amount_paid,
 
@@ -155,18 +243,31 @@ $sales_sql = "
 
 ";
 
-
-$sales = mysqli_query($conn, $sales_sql);
-
+$sales = mysqli_query(
+    $conn,
+    $salesSql
+);
 
 if (!$sales) {
 
     die(
-        "SALES SQL ERROR: "
-        . mysqli_error($conn)
+        "SALES SQL ERROR: " .
+        mysqli_error($conn)
     );
-
 }
+
+/*
+|--------------------------------------------------------------------------
+| EXPORT URL
+|--------------------------------------------------------------------------
+*/
+
+$exportUrl =
+    "export_sales_excel.php?" .
+    "from=" . urlencode($from) .
+    "&to=" . urlencode($to) .
+    "&payment=" . urlencode($payment) .
+    "&status=" . urlencode($status);
 
 ?>
 
@@ -179,13 +280,12 @@ if (!$sales) {
 <meta charset="UTF-8">
 
 <meta
-name="viewport"
-content="width=device-width, initial-scale=1.0"
-
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
 >
 
 <title>
-Sales Report - R&R Collection
+    Sales Report - R&R Collection
 </title>
 
 <link
@@ -197,6 +297,121 @@ Sales Report - R&R Collection
     rel="stylesheet"
     href="../../assets/css/reports.css"
 >
+
+<style>
+
+/* =====================================================
+   REPORT ACTIONS
+===================================================== */
+
+.report-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.btn-back,
+.btn-export {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+
+    padding: 10px 16px;
+
+    border-radius: 8px;
+
+    text-decoration: none;
+
+    font-weight: 600;
+
+    transition: all 0.2s ease;
+
+    white-space: nowrap;
+}
+
+.btn-back {
+    background: #f1f5f9;
+    color: #1e293b;
+    border: 1px solid #cbd5e1;
+}
+
+.btn-back:hover {
+    background: #e2e8f0;
+}
+
+.btn-export {
+    background: #166534;
+    color: #ffffff;
+    border: 1px solid #166534;
+}
+
+.btn-export:hover {
+    background: #14532d;
+}
+
+/* =====================================================
+   STATUS BADGES
+===================================================== */
+
+.status-badge {
+    display: inline-block;
+    padding: 5px 9px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.status-paid {
+    background: #dcfce7;
+    color: #166534;
+}
+
+.status-partial {
+    background: #fef3c7;
+    color: #92400e;
+}
+
+.status-credit {
+    background: #fee2e2;
+    color: #991b1b;
+}
+
+/* =====================================================
+   REPORT HEADER
+===================================================== */
+
+.reports-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+}
+
+/* =====================================================
+   MOBILE
+===================================================== */
+
+@media (max-width: 768px) {
+
+    .reports-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .report-actions {
+        width: 100%;
+    }
+
+    .btn-back,
+    .btn-export {
+        flex: 1;
+    }
+
+}
+
+</style>
 
 </head>
 
@@ -210,26 +425,43 @@ Sales Report - R&R Collection
 
 <div class="reports-header">
 
-```
-<div>
+    <div>
 
-    <h1>
-        Sales Report
-    </h1>
+        <h1>
+            Sales Report
+        </h1>
 
-    <p>
-        Detailed sales performance
-    </p>
+        <p>
+            Detailed sales performance
+        </p>
 
-</div>
+    </div>
 
+    <div class="report-actions">
 
-<div class="report-date">
+        <a
+    href="../dashboard.php"
+    class="btn-back"
+>
+    ← Back to Dashboard
+</a>
 
-    <?= date('d M Y'); ?>
+        <a
+            href="<?= htmlspecialchars($exportUrl); ?>"
+            target="_blank"
+            rel="noopener"
+            class="btn-export"
+        >
+            📊 Export to Excel
+        </a>
 
-</div>
-```
+        <div class="report-date">
+
+            <?= date('d M Y'); ?>
+
+        </div>
+
+    </div>
 
 </div>
 
@@ -241,99 +473,110 @@ Sales Report - R&R Collection
 
 <form method="GET">
 
-<div>
+    <div>
 
-<label>
-From
-</label>
+        <label>
+            From
+        </label>
 
-<input
-type="date"
-name="from"
-value="<?= htmlspecialchars($from); ?>"
+        <input
+            type="date"
+            name="from"
+            value="<?= htmlspecialchars($from); ?>"
+            required
+        >
 
->
+    </div>
 
-</div>
+    <div>
 
-<div>
+        <label>
+            To
+        </label>
 
-<label>
-To
-</label>
+        <input
+            type="date"
+            name="to"
+            value="<?= htmlspecialchars($to); ?>"
+            required
+        >
 
-<input
-type="date"
-name="to"
-value="<?= htmlspecialchars($to); ?>"
+    </div>
 
->
+    <div>
 
-</div>
+        <label>
+            Payment Method
+        </label>
 
-<div>
+        <select name="payment">
 
-<label>
-Payment Method
-</label>
+            <option value="">
+                All Payments
+            </option>
 
-<select name="payment">
+            <option
+                value="Cash"
+                <?= $payment === 'Cash' ? 'selected' : ''; ?>
+            >
+                Cash
+            </option>
 
-<option value="">
-All Payments
-</option>
+            <option
+                value="Lipa na M-Pesa"
+                <?= $payment === 'Lipa na M-Pesa' ? 'selected' : ''; ?>
+            >
+                Lipa na M-Pesa
+            </option>
 
-<option
-    value="Cash"
-    <?= $payment === 'Cash' ? 'selected' : ''; ?>
->
+        </select>
 
-Cash
+    </div>
 
-</option>
+    <div>
 
-<option
-    value="Mpesa"
-    <?= $payment === 'Mpesa' ? 'selected' : ''; ?>
->
+        <label>
+            Payment Status
+        </label>
 
-M-Pesa
+        <select name="status">
 
-</option>
+            <option value="">
+                All Statuses
+            </option>
 
-<option
-    value="Credit"
-    <?= $payment === 'Credit' ? 'selected' : ''; ?>
->
+            <option
+                value="Paid"
+                <?= $status === 'Paid' ? 'selected' : ''; ?>
+            >
+                Paid
+            </option>
 
-Credit
+            <option
+                value="Partial"
+                <?= $status === 'Partial' ? 'selected' : ''; ?>
+            >
+                Partial
+            </option>
 
-</option>
+            <option
+                value="Credit"
+                <?= $status === 'Credit' ? 'selected' : ''; ?>
+            >
+                Credit
+            </option>
 
-<option
-    value="Installment"
-    <?= $payment === 'Installment' ? 'selected' : ''; ?>
->
+        </select>
 
-Installment
+    </div>
 
-</option>
+    <button type="submit">
+        Generate Report
+    </button>
 
-</select>
-
-</div>
-
-<button type="submit">
-
-Generate Report
-
-</button>
-
-<a href="sales.php">
-
-Reset
-
-</a>
+    <a href="sales.php">
+        Reset
+    </a>
 
 </form>
 
@@ -345,120 +588,115 @@ Reset
 
 <div class="report-cards">
 
-<!-- TRANSACTIONS -->
+    <!-- TRANSACTIONS -->
 
-<div class="report-card">
+    <div class="report-card">
 
-```
-<div class="card-icon">
-    🧾
-</div>
+        <div class="card-icon">
+            🧾
+        </div>
 
-<div>
+        <div>
 
-    <span>
-        Transactions
-    </span>
+            <span>
+                Transactions
+            </span>
 
-    <h2>
+            <h2>
 
-        <?= number_format(
-            (int)$summary['transactions']
-        ); ?>
+                <?= number_format(
+                    (int)$summary['transactions']
+                ); ?>
 
-    </h2>
+            </h2>
 
-</div>
-```
+        </div>
 
-</div>
+    </div>
 
-<!-- TOTAL SALES -->
 
-<div class="report-card">
+    <!-- TOTAL SALES -->
 
-```
-<div class="card-icon">
-    💰
-</div>
+    <div class="report-card">
 
-<div>
+        <div class="card-icon">
+            💰
+        </div>
 
-    <span>
-        Total Sales
-    </span>
+        <div>
 
-    <h2>
+            <span>
+                Total Sales
+            </span>
 
-        KSh <?= number_format(
-            (float)$summary['total'],
-            2
-        ); ?>
+            <h2>
 
-    </h2>
+                KSh <?= number_format(
+                    (float)$summary['total'],
+                    2
+                ); ?>
 
-</div>
-```
+            </h2>
 
-</div>
+        </div>
 
-<!-- AMOUNT PAID -->
+    </div>
 
-<div class="report-card">
 
-```
-<div class="card-icon">
-    💵
-</div>
+    <!-- AMOUNT PAID -->
 
-<div>
+    <div class="report-card">
 
-    <span>
-        Amount Paid
-    </span>
+        <div class="card-icon">
+            💵
+        </div>
 
-    <h2>
+        <div>
 
-        KSh <?= number_format(
-            (float)$summary['paid'],
-            2
-        ); ?>
+            <span>
+                Amount Paid
+            </span>
 
-    </h2>
+            <h2>
 
-</div>
-```
+                KSh <?= number_format(
+                    (float)$summary['paid'],
+                    2
+                ); ?>
 
-</div>
+            </h2>
 
-<!-- OUTSTANDING -->
+        </div>
 
-<div class="report-card">
+    </div>
 
-```
-<div class="card-icon">
-    ⚠️
-</div>
 
-<div>
+    <!-- OUTSTANDING -->
 
-    <span>
-        Outstanding
-    </span>
+    <div class="report-card">
 
-    <h2>
+        <div class="card-icon">
+            ⚠️
+        </div>
 
-        KSh <?= number_format(
-            (float)$summary['balance'],
-            2
-        ); ?>
+        <div>
 
-    </h2>
+            <span>
+                Outstanding
+            </span>
 
-</div>
-```
+            <h2>
 
-</div>
+                KSh <?= number_format(
+                    (float)$summary['balance'],
+                    2
+                ); ?>
+
+            </h2>
+
+        </div>
+
+    </div>
 
 </div>
 
@@ -468,188 +706,249 @@ Reset
 
 <div class="recent-sales">
 
-<div class="section-header">
+    <div class="section-header">
 
-```
-<div>
+        <div>
 
-    <h2>
-        Sales Transactions
-    </h2>
+            <h2>
+                Sales Transactions
+            </h2>
 
-    <p>
+            <p>
 
-        <?= htmlspecialchars($from); ?>
+                <?= htmlspecialchars($from); ?>
 
-        to
+                to
 
-        <?= htmlspecialchars($to); ?>
+                <?= htmlspecialchars($to); ?>
 
-    </p>
+            </p>
 
-</div>
-```
+        </div>
 
-</div>
+    </div>
 
-<div class="table-wrapper">
 
-<table>
+    <div class="table-wrapper">
 
-<thead>
+        <table>
 
-<tr>
+            <thead>
 
-<th>
-Invoice
-</th>
+                <tr>
 
-<th>
-Customer
-</th>
+                    <th>
+                        Invoice
+                    </th>
 
-<th>
-Payment
-</th>
+                    <th>
+                        Customer
+                    </th>
 
-<th>
-Total
-</th>
+                    <th>
+                        Payment
+                    </th>
 
-<th>
-Paid
-</th>
+                    <th>
+                        Status
+                    </th>
 
-<th>
-Balance
-</th>
+                    <th>
+                        Total
+                    </th>
 
-<th>
-Date
-</th>
+                    <th>
+                        Paid
+                    </th>
 
-</tr>
+                    <th>
+                        Balance
+                    </th>
 
-</thead>
+                    <th>
+                        Date
+                    </th>
 
-<tbody>
+                </tr>
 
-<?php if (mysqli_num_rows($sales) > 0): ?>
+            </thead>
 
-<?php while ($sale = mysqli_fetch_assoc($sales)): ?>
+            <tbody>
 
-<tr>
+            <?php if (mysqli_num_rows($sales) > 0): ?>
 
-<td>
+                <?php while ($sale = mysqli_fetch_assoc($sales)): ?>
 
-<strong>
+                    <tr>
 
-<?= htmlspecialchars(
-    $sale['invoice_no']
-); ?>
+                        <!-- INVOICE -->
 
-</strong>
+                        <td>
 
-</td>
+                            <strong>
 
-<td>
+                                <?= htmlspecialchars(
+                                    $sale['invoice_no']
+                                ); ?>
 
-<?= htmlspecialchars(
-    $sale['customer_name']
-); ?>
+                            </strong>
 
-</td>
+                        </td>
 
-<td>
 
-<?= htmlspecialchars(
-    $sale['payment_method']
-); ?>
+                        <!-- CUSTOMER -->
 
-</td>
+                        <td>
 
-<td>
+                            <?= htmlspecialchars(
+                                $sale['customer_name']
+                            ); ?>
 
-<strong>
+                        </td>
 
-KSh <?= number_format(
- (float)$sale['total'],
- 2
-); ?>
 
-</strong>
+                        <!-- PAYMENT -->
 
-</td>
+                        <td>
 
-<td>
+                            <?= htmlspecialchars(
+                                $sale['payment_method']
+                            ); ?>
 
-KSh <?= number_format(
- (float)$sale['amount_paid'],
- 2
-); ?>
+                        </td>
 
-</td>
 
-<td>
+                        <!-- STATUS -->
 
-<?php if ((float)$sale['balance'] > 0): ?>
+                        <td>
 
-<span class="balance-warning">
+                            <?php
 
-KSh <?= number_format(
- (float)$sale['balance'],
- 2
-); ?>
+                            $saleStatus =
+                                $sale['payment_status'];
 
-</span>
+                            $statusClass = '';
 
-<?php else: ?>
+                            if ($saleStatus === 'Paid') {
+                                $statusClass = 'status-paid';
+                            } elseif ($saleStatus === 'Partial') {
+                                $statusClass = 'status-partial';
+                            } elseif ($saleStatus === 'Credit') {
+                                $statusClass = 'status-credit';
+                            }
 
-<span class="balance-clear">
+                            ?>
 
-KSh 0.00
+                            <span
+                                class="status-badge <?= $statusClass; ?>"
+                            >
 
-</span>
+                                <?= htmlspecialchars(
+                                    $saleStatus
+                                ); ?>
 
-<?php endif; ?>
+                            </span>
 
-</td>
+                        </td>
 
-<td>
 
-<?= date(
-    'd M Y H:i',
-    strtotime($sale['sale_date'])
-); ?>
+                        <!-- TOTAL -->
 
-</td>
+                        <td>
 
-</tr>
+                            <strong>
 
-<?php endwhile; ?>
+                                KSh <?= number_format(
+                                    (float)$sale['total'],
+                                    2
+                                ); ?>
 
-<?php else: ?>
+                            </strong>
 
-<tr>
+                        </td>
 
-<td
-    colspan="7"
-    class="empty-state"
->
 
-No sales found for the selected period.
+                        <!-- PAID -->
 
-</td>
+                        <td>
 
-</tr>
+                            KSh <?= number_format(
+                                (float)$sale['amount_paid'],
+                                2
+                            ); ?>
 
-<?php endif; ?>
+                        </td>
 
-</tbody>
 
-</table>
+                        <!-- BALANCE -->
 
-</div>
+                        <td>
+
+                            <?php if (
+                                (float)$sale['balance'] > 0
+                            ): ?>
+
+                                <span class="balance-warning">
+
+                                    KSh <?= number_format(
+                                        (float)$sale['balance'],
+                                        2
+                                    ); ?>
+
+                                </span>
+
+                            <?php else: ?>
+
+                                <span class="balance-clear">
+
+                                    KSh 0.00
+
+                                </span>
+
+                            <?php endif; ?>
+
+                        </td>
+
+
+                        <!-- DATE -->
+
+                        <td>
+
+                            <?= date(
+                                'd M Y H:i',
+                                strtotime(
+                                    $sale['sale_date']
+                                )
+                            ); ?>
+
+                        </td>
+
+                    </tr>
+
+                <?php endwhile; ?>
+
+            <?php else: ?>
+
+                <tr>
+
+                    <td
+                        colspan="8"
+                        class="empty-state"
+                    >
+
+                        No sales found for the selected period.
+
+                    </td>
+
+                </tr>
+
+            <?php endif; ?>
+
+            </tbody>
+
+        </table>
+
+    </div>
 
 </div>
 

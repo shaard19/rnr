@@ -1,61 +1,89 @@
 <?php
 
-error_reporting(E_ALL);
-ini_set('display_errors', 1);
+/*
+|--------------------------------------------------------------------------
+| R&R COLLECTION POS
+| Admin Dashboard
+|--------------------------------------------------------------------------
+*/
 
 require_once "../config/session.php";
 require_once "../config/database.php";
 
-
 /*
 |--------------------------------------------------------------------------
-| DASHBOARD STATISTICS
+| Safe database helper
 |--------------------------------------------------------------------------
 */
 
+function dashboardQuery($conn, $sql)
+{
+    $result = mysqli_query($conn, $sql);
+
+    if ($result === false) {
+        error_log("R&R Dashboard SQL Error: " . mysqli_error($conn));
+        return false;
+    }
+
+    return $result;
+}
+
+function dashboardCount($conn, $sql)
+{
+    $result = dashboardQuery($conn, $sql);
+
+    if (!$result) {
+        return 0;
+    }
+
+    $row = mysqli_fetch_assoc($result);
+
+    return (int)($row['total'] ?? 0);
+}
+
+function dashboardAmount($conn, $sql)
+{
+    $result = dashboardQuery($conn, $sql);
+
+    if (!$result) {
+        return 0;
+    }
+
+    $row = mysqli_fetch_assoc($result);
+
+    return (float)($row['total'] ?? 0);
+}
+
 
 /*
 |--------------------------------------------------------------------------
-| TOTAL PRODUCTS
+| BASIC STATISTICS
 |--------------------------------------------------------------------------
 */
 
-$productQuery = mysqli_query(
+$totalProducts = dashboardCount(
     $conn,
-    "SELECT COUNT(*) AS total
-     FROM products"
+    "SELECT COUNT(*) AS total FROM products"
 );
 
-$product = mysqli_fetch_assoc($productQuery);
-
-$totalProducts = (int)($product['total'] ?? 0);
-
-
-/*
-|--------------------------------------------------------------------------
-| ACTIVE PRODUCTS
-|--------------------------------------------------------------------------
-*/
-
-$activeProductQuery = mysqli_query(
+$activeProducts = dashboardCount(
     $conn,
     "SELECT COUNT(*) AS total
      FROM products
      WHERE status = 'Active'"
 );
 
-$activeProduct = mysqli_fetch_assoc($activeProductQuery);
+$totalCategories = dashboardCount(
+    $conn,
+    "SELECT COUNT(*) AS total FROM categories"
+);
 
-$activeProducts = (int)($activeProduct['total'] ?? 0);
+$totalCustomers = dashboardCount(
+    $conn,
+    "SELECT COUNT(*) AS total FROM customers"
+);
 
-
-/*
-|--------------------------------------------------------------------------
-| LOW STOCK PRODUCTS
-|--------------------------------------------------------------------------
-*/
-
-$lowStockQuery = mysqli_query(
+$lowStockProducts = dashboardCount(
     $conn,
     "SELECT COUNT(*) AS total
      FROM products
@@ -64,44 +92,6 @@ $lowStockQuery = mysqli_query(
      AND quantity <= reorder_level"
 );
 
-$lowStock = mysqli_fetch_assoc($lowStockQuery);
-
-$lowStockProducts = (int)($lowStock['total'] ?? 0);
-
-
-/*
-|--------------------------------------------------------------------------
-| TOTAL CATEGORIES
-|--------------------------------------------------------------------------
-*/
-
-$categoryQuery = mysqli_query(
-    $conn,
-    "SELECT COUNT(*) AS total
-     FROM categories"
-);
-
-$category = mysqli_fetch_assoc($categoryQuery);
-
-$totalCategories = (int)($category['total'] ?? 0);
-
-
-/*
-|--------------------------------------------------------------------------
-| TOTAL CUSTOMERS
-|--------------------------------------------------------------------------
-*/
-
-$customerQuery = mysqli_query(
-    $conn,
-    "SELECT COUNT(*) AS total
-     FROM customers"
-);
-
-$customer = mysqli_fetch_assoc($customerQuery);
-
-$totalCustomers = (int)($customer['total'] ?? 0);
-
 
 /*
 |--------------------------------------------------------------------------
@@ -109,40 +99,199 @@ $totalCustomers = (int)($customer['total'] ?? 0);
 |--------------------------------------------------------------------------
 */
 
-$salesQuery = mysqli_query(
+$todaySales = dashboardAmount(
     $conn,
-    "SELECT
-        IFNULL(SUM(total), 0) AS total
+    "SELECT COALESCE(SUM(total), 0) AS total
      FROM sales
      WHERE DATE(sale_date) = CURDATE()"
 );
 
-$sales = mysqli_fetch_assoc($salesQuery);
-
-$todaySales = (float)($sales['total'] ?? 0);
-
-
-/*
-|--------------------------------------------------------------------------
-| TODAY'S TRANSACTIONS
-|--------------------------------------------------------------------------
-*/
-
-$transactionQuery = mysqli_query(
+$todayTransactions = dashboardCount(
     $conn,
     "SELECT COUNT(*) AS total
      FROM sales
      WHERE DATE(sale_date) = CURDATE()"
 );
 
-$transactions = mysqli_fetch_assoc($transactionQuery);
+$todayAmountPaid = dashboardAmount(
+    $conn,
+    "SELECT COALESCE(SUM(amount_paid), 0) AS total
+     FROM sales
+     WHERE DATE(sale_date) = CURDATE()"
+);
 
-$todayTransactions = (int)($transactions['total'] ?? 0);
+$todayOutstanding = dashboardAmount(
+    $conn,
+    "SELECT COALESCE(SUM(balance), 0) AS total
+     FROM sales
+     WHERE DATE(sale_date) = CURDATE()
+     AND balance > 0"
+);
+
+
+/*
+|--------------------------------------------------------------------------
+| PAYMENT METHOD SUMMARY
+|--------------------------------------------------------------------------
+*/
+
+$cashSales = dashboardAmount(
+    $conn,
+    "SELECT COALESCE(SUM(total), 0) AS total
+     FROM sales
+     WHERE DATE(sale_date) = CURDATE()
+     AND payment_method = 'Cash'"
+);
+
+$mpesaSales = dashboardAmount(
+    $conn,
+    "SELECT COALESCE(SUM(total), 0) AS total
+     FROM sales
+     WHERE DATE(sale_date) = CURDATE()
+     AND payment_method = 'Lipa na M-Pesa'"
+);
+
+
+/*
+|--------------------------------------------------------------------------
+| PAYMENT STATUS SUMMARY
+|--------------------------------------------------------------------------
+*/
+
+$paidSales = dashboardAmount(
+    $conn,
+    "SELECT COALESCE(SUM(total), 0) AS total
+     FROM sales
+     WHERE DATE(sale_date) = CURDATE()
+     AND payment_status = 'Paid'"
+);
+
+$partialSales = dashboardAmount(
+    $conn,
+    "SELECT COALESCE(SUM(total), 0) AS total
+     FROM sales
+     WHERE DATE(sale_date) = CURDATE()
+     AND payment_status = 'Partial'"
+);
+
+$creditSales = dashboardAmount(
+    $conn,
+    "SELECT COALESCE(SUM(total), 0) AS total
+     FROM sales
+     WHERE DATE(sale_date) = CURDATE()
+     AND payment_status = 'Credit'"
+);
+
+
+/*
+|--------------------------------------------------------------------------
+| PRODUCTS BY CATEGORY
+|--------------------------------------------------------------------------
+*/
+
+$categoryData = [];
+
+$categoryQuery = dashboardQuery(
+    $conn,
+    "SELECT
+        c.category_name,
+        COUNT(p.id) AS product_count
+     FROM categories c
+     LEFT JOIN products p
+        ON p.category_id = c.id
+        AND p.status = 'Active'
+     GROUP BY c.id, c.category_name
+     HAVING product_count > 0
+     ORDER BY product_count DESC"
+);
+
+if ($categoryQuery) {
+
+    while ($row = mysqli_fetch_assoc($categoryQuery)) {
+
+        $categoryData[] = [
+            'name'  => $row['category_name'],
+            'count' => (int)$row['product_count']
+        ];
+    }
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| BUILD PIE CHART GRADIENT
+|--------------------------------------------------------------------------
+*/
+
+$chartColors = [
+    '#2563EB',
+    '#16A34A',
+    '#EA580C',
+    '#9333EA',
+    '#0891B2',
+    '#DC2626',
+    '#CA8A04',
+    '#4F46E5'
+];
+
+$totalCategoryProducts = 0;
+
+foreach ($categoryData as $category) {
+    $totalCategoryProducts += $category['count'];
+}
+
+$gradientParts = [];
+$currentDegree = 0;
+
+foreach ($categoryData as $index => $category) {
+
+    if ($totalCategoryProducts <= 0) {
+        break;
+    }
+
+    $percentage = ($category['count'] / $totalCategoryProducts) * 100;
+    $degrees = ($percentage / 100) * 360;
+
+    $start = $currentDegree;
+    $end = $currentDegree + $degrees;
+
+    $color = $chartColors[$index % count($chartColors)];
+
+    $gradientParts[] = "{$color} {$start}deg {$end}deg";
+
+    $currentDegree = $end;
+}
+
+$pieGradient = !empty($gradientParts)
+    ? "conic-gradient(" . implode(',', $gradientParts) . ")"
+    : "#E5E7EB";
+
+
+/*
+|--------------------------------------------------------------------------
+| RECENT TRANSACTIONS
+|--------------------------------------------------------------------------
+*/
+
+$recentSales = dashboardQuery(
+    $conn,
+    "SELECT
+        id,
+        invoice_no,
+        total,
+        payment_method,
+        payment_status,
+        amount_paid,
+        balance,
+        sale_date
+     FROM sales
+     ORDER BY sale_date DESC
+     LIMIT 8"
+);
 
 ?>
 
 <!DOCTYPE html>
-
 <html lang="en">
 
 <head>
@@ -150,14 +299,11 @@ $todayTransactions = (int)($transactions['total'] ?? 0);
 <meta charset="UTF-8">
 
 <meta
-name="viewport"
-content="width=device-width, initial-scale=1.0"
-
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
 >
 
-<title>
-Dashboard | R&R Collection POS
-</title>
+<title>Dashboard | R&R Collection POS</title>
 
 <link
     rel="stylesheet"
@@ -179,115 +325,6 @@ Dashboard | R&R Collection POS
     href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css"
 >
 
-<style>
-
-/*
-|--------------------------------------------------------------------------
-| DASHBOARD STATUS
-|--------------------------------------------------------------------------
-*/
-
-.dashboard-status {
-    display: flex;
-    gap: 10px;
-    flex-wrap: wrap;
-    margin-top: 10px;
-}
-
-
-.dashboard-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 6px 11px;
-    border-radius: 20px;
-    font-size: 12px;
-    font-weight: 600;
-}
-
-
-.badge-success {
-    background: #dcfce7;
-    color: #166534;
-}
-
-
-.badge-warning {
-    background: #fef3c7;
-    color: #92400e;
-}
-
-
-.badge-danger {
-    background: #fee2e2;
-    color: #991b1b;
-}
-
-
-/*
-|--------------------------------------------------------------------------
-| QUICK ACTIONS
-|--------------------------------------------------------------------------
-*/
-
-.quick-actions {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-    gap: 15px;
-    margin-top: 20px;
-}
-
-
-.quick-action {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 16px;
-    text-decoration: none;
-    border: 1px solid #e5e7eb;
-    border-radius: 8px;
-    background: #ffffff;
-    transition: 0.2s ease;
-}
-
-
-.quick-action:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-}
-
-
-.quick-action i {
-    font-size: 20px;
-}
-
-
-.quick-action strong {
-    display: block;
-}
-
-
-.quick-action small {
-    color: #6b7280;
-}
-
-
-/*
-|--------------------------------------------------------------------------
-| DASHBOARD RESPONSIVE
-|--------------------------------------------------------------------------
-*/
-
-@media (max-width: 700px) {
-
-    .cards {
-        grid-template-columns: 1fr;
-    }
-
-}
-
-</style>
-
 </head>
 
 <body>
@@ -300,433 +337,801 @@ Dashboard | R&R Collection POS
 
 <div class="container">
 
-<!-- PAGE TITLE -->
+
+<!-- =========================================================
+     PAGE HEADER
+========================================================= -->
 
 <div class="page-title">
 
-<h1>
+    <div>
 
-<i class="fa-solid fa-gauge-high"></i>
+        <h1>
+            <i class="fa-solid fa-gauge-high"></i>
+            Dashboard
+        </h1>
 
-Dashboard
+        <p>
+            Welcome back,
+            <strong>
+                <?= htmlspecialchars($_SESSION['fullname'] ?? 'User'); ?>
+            </strong>
+        </p>
 
-</h1>
+    </div>
 
-<p>
+    <div class="dashboard-status">
 
-Welcome back, <strong>
+        <span class="dashboard-badge badge-success">
 
-<?= htmlspecialchars($_SESSION['fullname'] ?? 'User'); ?>
+            <i class="fa-solid fa-circle-check"></i>
 
-</strong>
+            System Online
 
-</p>
+        </span>
 
-<div class="dashboard-status">
+        <?php if ($lowStockProducts > 0): ?>
 
-<span class="dashboard-badge badge-success">
+            <span class="dashboard-badge badge-warning">
 
-<i class="fa-solid fa-circle-check"></i>
+                <i class="fa-solid fa-triangle-exclamation"></i>
 
-System Online
+                <?= $lowStockProducts; ?> Low Stock
 
-</span>
+            </span>
 
-<?php if ($lowStockProducts > 0): ?>
+        <?php else: ?>
 
-<span class="dashboard-badge badge-warning">
+            <span class="dashboard-badge badge-success">
 
-<i class="fa-solid fa-triangle-exclamation"></i>
+                <i class="fa-solid fa-boxes-stacked"></i>
 
-<?= $lowStockProducts; ?>
+                Stock Levels Good
 
-Low Stock
+            </span>
 
-</span>
+        <?php endif; ?>
 
-<?php else: ?>
-
-<span class="dashboard-badge badge-success">
-
-<i class="fa-solid fa-boxes-stacked"></i>
-
-Stock Levels Good
-
-</span>
-
-<?php endif; ?>
+    </div>
 
 </div>
 
-</div>
 
-<!-- DASHBOARD CARDS -->
+<!-- =========================================================
+     STATISTICS CARDS
+========================================================= -->
 
 <div class="cards">
 
-<!-- TOTAL PRODUCTS -->
 
-<div class="card">
+    <div class="card">
 
-<div>
+        <div>
 
-<small>Total Products</small>
+            <small>Total Products</small>
 
-<h2>
-<?= $totalProducts; ?>
-</h2>
+            <h2><?= $totalProducts; ?></h2>
 
-</div>
+        </div>
 
-<div class="card-icon blue">
+        <div class="card-icon blue">
 
-<i class="fa-solid fa-box-open"></i>
+            <i class="fa-solid fa-box-open"></i>
 
-</div>
+        </div>
 
-</div>
+    </div>
 
-<!-- ACTIVE PRODUCTS -->
 
-<div class="card">
+    <div class="card">
 
-<div>
+        <div>
 
-<small>Active Products</small>
+            <small>Active Products</small>
 
-<h2>
-<?= $activeProducts; ?>
-</h2>
+            <h2><?= $activeProducts; ?></h2>
 
-</div>
+        </div>
 
-<div class="card-icon green">
+        <div class="card-icon green">
 
-<i class="fa-solid fa-boxes-stacked"></i>
+            <i class="fa-solid fa-boxes-stacked"></i>
 
-</div>
+        </div>
 
-</div>
+    </div>
 
-<!-- CUSTOMERS -->
 
-<div class="card">
+    <div class="card">
 
-<div>
+        <div>
 
-<small>Customers</small>
+            <small>Customers</small>
 
-<h2>
-<?= $totalCustomers; ?>
-</h2>
+            <h2><?= $totalCustomers; ?></h2>
 
-</div>
+        </div>
 
-<div class="card-icon orange">
+        <div class="card-icon orange">
 
-<i class="fa-solid fa-users"></i>
+            <i class="fa-solid fa-users"></i>
 
-</div>
+        </div>
 
-</div>
+    </div>
 
-<!-- CATEGORIES -->
 
-<div class="card">
+    <div class="card">
 
-<div>
+        <div>
 
-<small>Categories</small>
+            <small>Categories</small>
 
-<h2>
-<?= $totalCategories; ?>
-</h2>
+            <h2><?= $totalCategories; ?></h2>
 
-</div>
+        </div>
 
-<div class="card-icon blue">
+        <div class="card-icon blue">
 
-<i class="fa-solid fa-layer-group"></i>
+            <i class="fa-solid fa-layer-group"></i>
 
-</div>
+        </div>
 
-</div>
+    </div>
 
-<!-- LOW STOCK -->
 
-<div class="card">
+    <div class="card">
 
-<div>
+        <div>
 
-<small>Low Stock</small>
+            <small>Low Stock</small>
 
-<h2>
-<?= $lowStockProducts; ?>
-</h2>
+            <h2><?= $lowStockProducts; ?></h2>
 
-</div>
+        </div>
 
-<div class="card-icon orange">
+        <div class="card-icon orange">
 
-<i class="fa-solid fa-triangle-exclamation"></i>
+            <i class="fa-solid fa-triangle-exclamation"></i>
 
-</div>
+        </div>
 
-</div>
+    </div>
 
-<!-- TODAY SALES -->
 
-<div class="card">
+    <div class="card">
 
-<div>
+        <div>
 
-<small>Today's Sales</small>
+            <small>Today's Sales</small>
 
-<h2>
+            <h2>
+                KSh <?= number_format($todaySales, 2); ?>
+            </h2>
 
-KSh
+        </div>
 
-<?= number_format($todaySales, 2); ?>
+        <div class="card-icon red">
 
-</h2>
+            <i class="fa-solid fa-sack-dollar"></i>
+
+        </div>
+
+    </div>
 
 </div>
 
-<div class="card-icon red">
 
-<i class="fa-solid fa-sack-dollar"></i>
+<!-- =========================================================
+     TODAY'S FINANCIAL SUMMARY
+========================================================= -->
+
+<div class="analytics-grid">
+
+
+    <div class="panel">
+
+        <div class="panel-heading">
+
+            <h3>
+                <i class="fa-solid fa-chart-line"></i>
+                Today's Financial Summary
+            </h3>
+
+        </div>
+
+        <div class="summary-grid">
+
+            <div class="summary-item">
+
+                <span>
+                    <i class="fa-solid fa-receipt"></i>
+                    Transactions
+                </span>
+
+                <strong>
+                    <?= $todayTransactions; ?>
+                </strong>
+
+            </div>
+
+
+            <div class="summary-item">
+
+                <span>
+                    <i class="fa-solid fa-money-bill-wave"></i>
+                    Total Sales
+                </span>
+
+                <strong>
+                    KSh <?= number_format($todaySales, 2); ?>
+                </strong>
+
+            </div>
+
+
+            <div class="summary-item">
+
+                <span>
+                    <i class="fa-solid fa-hand-holding-dollar"></i>
+                    Amount Received
+                </span>
+
+                <strong>
+                    KSh <?= number_format($todayAmountPaid, 2); ?>
+                </strong>
+
+            </div>
+
+
+            <div class="summary-item danger-item">
+
+                <span>
+                    <i class="fa-solid fa-clock"></i>
+                    Outstanding
+                </span>
+
+                <strong>
+                    KSh <?= number_format($todayOutstanding, 2); ?>
+                </strong>
+
+            </div>
+
+        </div>
+
+
+        <div class="payment-breakdown">
+
+            <div class="breakdown-row">
+
+                <span>
+                    <i class="fa-solid fa-money-bill"></i>
+                    Cash
+                </span>
+
+                <strong>
+                    KSh <?= number_format($cashSales, 2); ?>
+                </strong>
+
+            </div>
+
+
+            <div class="breakdown-row">
+
+                <span>
+                    <i class="fa-solid fa-mobile-screen-button"></i>
+                    Lipa na M-Pesa
+                </span>
+
+                <strong>
+                    KSh <?= number_format($mpesaSales, 2); ?>
+                </strong>
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <!-- =====================================================
+         PRODUCT CATEGORY PIE CHART
+    ====================================================== -->
+
+    <div class="panel chart-panel">
+
+        <div class="panel-heading">
+
+            <h3>
+                <i class="fa-solid fa-chart-pie"></i>
+                Products by Category
+            </h3>
+
+        </div>
+
+        <?php if (!empty($categoryData)): ?>
+
+            <div class="pie-chart-wrapper">
+
+                <div
+                    class="pie-chart"
+                    style="background: <?= htmlspecialchars($pieGradient); ?>;"
+                >
+
+                    <div class="pie-hole">
+
+                        <strong>
+                            <?= $totalCategoryProducts; ?>
+                        </strong>
+
+                        <small>
+                            Active Products
+                        </small>
+
+                    </div>
+
+                </div>
+
+
+                <div class="chart-legend">
+
+                    <?php foreach ($categoryData as $index => $category): ?>
+
+                        <?php
+
+                        $color =
+                            $chartColors[$index % count($chartColors)];
+
+                        $percentage =
+                            $totalCategoryProducts > 0
+                            ? ($category['count'] / $totalCategoryProducts) * 100
+                            : 0;
+
+                        ?>
+
+                        <div class="legend-item">
+
+                            <span
+                                class="legend-dot"
+                                style="background: <?= $color; ?>;"
+                            ></span>
+
+                            <span class="legend-name">
+
+                                <?= htmlspecialchars($category['name']); ?>
+
+                            </span>
+
+                            <strong>
+
+                                <?= $category['count']; ?>
+
+                                <small>
+                                    (<?= number_format($percentage, 1); ?>%)
+                                </small>
+
+                            </strong>
+
+                        </div>
+
+                    <?php endforeach; ?>
+
+                </div>
+
+            </div>
+
+        <?php else: ?>
+
+            <div class="empty-state">
+
+                <i class="fa-solid fa-chart-pie"></i>
+
+                <p>
+                    No active products available for the chart.
+                </p>
+
+            </div>
+
+        <?php endif; ?>
+
+    </div>
 
 </div>
 
-</div>
+
+<!-- =========================================================
+     PAYMENT STATUS
+========================================================= -->
+
+<div class="panel payment-status-panel">
+
+    <div class="panel-heading">
+
+        <h3>
+            <i class="fa-solid fa-wallet"></i>
+            Today's Payment Status
+        </h3>
+
+    </div>
+
+    <div class="status-grid">
+
+
+        <div class="status-box paid">
+
+            <i class="fa-solid fa-circle-check"></i>
+
+            <div>
+
+                <small>Paid</small>
+
+                <strong>
+                    KSh <?= number_format($paidSales, 2); ?>
+                </strong>
+
+            </div>
+
+        </div>
+
+
+        <div class="status-box partial">
+
+            <i class="fa-solid fa-circle-half-stroke"></i>
+
+            <div>
+
+                <small>Partial</small>
+
+                <strong>
+                    KSh <?= number_format($partialSales, 2); ?>
+                </strong>
+
+            </div>
+
+        </div>
+
+
+        <div class="status-box credit">
+
+            <i class="fa-solid fa-credit-card"></i>
+
+            <div>
+
+                <small>Credit</small>
+
+                <strong>
+                    KSh <?= number_format($creditSales, 2); ?>
+                </strong>
+
+            </div>
+
+        </div>
+
+    </div>
 
 </div>
 
-<!-- TODAY SUMMARY -->
+
+<!-- =========================================================
+     RECENT TRANSACTIONS
+========================================================= -->
 
 <div class="panel">
 
-<h3>
+    <div class="panel-heading">
 
-<i class="fa-solid fa-chart-simple"></i>
+        <h3>
 
-Today's Summary
+            <i class="fa-solid fa-clock-rotate-left"></i>
 
-</h3>
+            Recent Transactions
 
-<table>
+        </h3>
 
-<tr>
+        <a
+            href="sales/index.php"
+            class="panel-link"
+        >
+            View Sales
+        </a>
 
-<th>Metric</th>
+    </div>
 
-<th>Value</th>
 
-</tr>
+    <div class="table-wrapper">
 
-<tr>
+        <table class="recent-table">
 
-<td>
-Sales Transactions
-</td>
+            <thead>
 
-<td>
+                <tr>
 
-<strong>
-<?= $todayTransactions; ?>
-</strong>
+                    <th>Invoice</th>
 
-</td>
+                    <th>Total</th>
 
-</tr>
+                    <th>Paid</th>
 
-<tr>
+                    <th>Balance</th>
 
-<td>
-Total Sales
-</td>
+                    <th>Method</th>
 
-<td>
+                    <th>Status</th>
 
-<strong>
+                    <th>Date</th>
 
-KSh
+                </tr>
 
-<?= number_format($todaySales, 2); ?>
+            </thead>
 
-</strong>
+            <tbody>
 
-</td>
+            <?php if ($recentSales && mysqli_num_rows($recentSales) > 0): ?>
 
-</tr>
+                <?php while ($sale = mysqli_fetch_assoc($recentSales)): ?>
 
-<tr>
+                    <tr>
 
-<td>
-Low Stock Products
-</td>
+                        <td>
 
-<td>
+                            <strong>
 
-<strong>
+                                <?= htmlspecialchars(
+                                    $sale['invoice_no'] ?? 'N/A'
+                                ); ?>
 
-<?= $lowStockProducts; ?>
+                            </strong>
 
-</strong>
+                        </td>
 
-</td>
+                        <td>
 
-</tr>
+                            KSh <?= number_format(
+                                (float)$sale['total'],
+                                2
+                            ); ?>
 
-</table>
+                        </td>
+
+                        <td>
+
+                            KSh <?= number_format(
+                                (float)$sale['amount_paid'],
+                                2
+                            ); ?>
+
+                        </td>
+
+                        <td>
+
+                            KSh <?= number_format(
+                                (float)$sale['balance'],
+                                2
+                            ); ?>
+
+                        </td>
+
+                        <td>
+
+                            <?php if ($sale['payment_method'] === 'Lipa na M-Pesa'): ?>
+
+                                <span class="method-badge mpesa">
+
+                                    <i class="fa-solid fa-mobile-screen"></i>
+
+                                    M-Pesa
+
+                                </span>
+
+                            <?php else: ?>
+
+                                <span class="method-badge cash">
+
+                                    <i class="fa-solid fa-money-bill"></i>
+
+                                    Cash
+
+                                </span>
+
+                            <?php endif; ?>
+
+                        </td>
+
+                        <td>
+
+                            <?php
+
+                            $statusClass = strtolower(
+                                $sale['payment_status']
+                            );
+
+                            ?>
+
+                            <span
+                                class="status-badge <?= htmlspecialchars($statusClass); ?>"
+                            >
+
+                                <?= htmlspecialchars(
+                                    $sale['payment_status']
+                                ); ?>
+
+                            </span>
+
+                        </td>
+
+                        <td>
+
+                            <?= date(
+                                'd M Y, H:i',
+                                strtotime($sale['sale_date'])
+                            ); ?>
+
+                        </td>
+
+                    </tr>
+
+                <?php endwhile; ?>
+
+            <?php else: ?>
+
+                <tr>
+
+                    <td
+                        colspan="7"
+                        class="empty-table"
+                    >
+
+                        <i class="fa-solid fa-receipt"></i>
+
+                        No transactions recorded yet.
+
+                    </td>
+
+                </tr>
+
+            <?php endif; ?>
+
+            </tbody>
+
+        </table>
+
+    </div>
 
 </div>
 
-<!-- QUICK ACTIONS -->
+
+<!-- =========================================================
+     QUICK ACTIONS
+========================================================= -->
 
 <div class="panel">
 
-<h3>
+    <div class="panel-heading">
 
-<i class="fa-solid fa-bolt"></i>
+        <h3>
 
-Quick Actions
+            <i class="fa-solid fa-bolt"></i>
 
-</h3>
+            Quick Actions
 
-<div class="quick-actions">
+        </h3>
 
-<a
-href="categories/index.php"
-class="quick-action"
+    </div>
 
->
 
-<i class="fa-solid fa-layer-group"></i>
+    <div class="quick-actions">
 
-<div>
 
-<strong>
-Categories
-</strong>
+        <a
+            href="categories/index.php"
+            class="quick-action"
+        >
 
-<small>
-Manage categories
-</small>
+            <i class="fa-solid fa-layer-group"></i>
 
-</div>
+            <div>
 
-</a>
+                <strong>Categories</strong>
 
-<a
-href="products/index.php"
-class="quick-action"
+                <small>Manage categories</small>
 
->
+            </div>
 
-<i class="fa-solid fa-box-open"></i>
+        </a>
 
-<div>
 
-<strong>
-Products
-</strong>
+        <a
+            href="products/index.php"
+            class="quick-action"
+        >
 
-<small>
-Manage inventory
-</small>
+            <i class="fa-solid fa-box-open"></i>
 
-</div>
+            <div>
 
-</a>
+                <strong>Products</strong>
 
-<a
-href="customers/index.php"
-class="quick-action"
+                <small>Manage inventory</small>
 
->
+            </div>
 
-<i class="fa-solid fa-users"></i>
+        </a>
 
-<div>
 
-<strong>
-Customers
-</strong>
+        <a
+            href="customers/index.php"
+            class="quick-action"
+        >
 
-<small>
-Manage customers
-</small>
+            <i class="fa-solid fa-users"></i>
 
-</div>
+            <div>
 
-</a>
+                <strong>Customers</strong>
 
-<a
-href="products/add.php"
-class="quick-action"
+                <small>Manage customers</small>
 
->
+            </div>
 
-<i class="fa-solid fa-plus"></i>
+        </a>
 
-<div>
 
-<strong>
-Add Product
-</strong>
+        <a
+            href="products/add.php"
+            class="quick-action"
+        >
 
-<small>
-Register new stock
-</small>
+            <i class="fa-solid fa-plus"></i>
 
-</div>
+            <div>
 
-</a>
+                <strong>Add Product</strong>
 
-<a
-href="customers/add.php"
-class="quick-action"
+                <small>Register new stock</small>
 
->
+            </div>
 
-<i class="fa-solid fa-user-plus"></i>
+        </a>
 
-<div>
 
-<strong>
-Add Customer
-</strong>
+        <a
+            href="customers/add.php"
+            class="quick-action"
+        >
 
-<small>
-Register customer
-</small>
+            <i class="fa-solid fa-user-plus"></i>
 
-</div>
+            <div>
 
-</a>
+                <strong>Add Customer</strong>
 
-<div class="quick-action">
+                <small>Register customer</small>
 
-<i class="fa-solid fa-cart-shopping"></i>
+            </div>
 
-<div>
+        </a>
 
-<strong>
-Sales
-</strong>
 
-<small>
-Coming next
-</small>
+        <a
+            href="../cashier/dashboard.php"
+            class="quick-action sales-action"
+        >
+
+            <i class="fa-solid fa-cart-shopping"></i>
+
+            <div>
+
+                <strong>Open POS</strong>
+
+                <small>Process a sale</small>
+            </div>
+
+        </a>
+
+    </div>
 
 </div>
 
-</div>
-
-</div>
-
-</div>
 
 </div>
 

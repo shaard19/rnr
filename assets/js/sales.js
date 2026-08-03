@@ -1,4 +1,4 @@
-console.log("RNR SALES JS - CREDIT FIX");
+console.log("RNR SALES JS - MPESA PAYMENT UPDATE");
 
 document.addEventListener("DOMContentLoaded", function () {
 
@@ -40,6 +40,28 @@ document.addEventListener("DOMContentLoaded", function () {
 
     const completeSaleButton =
         document.getElementById("complete-sale");
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | MPESA ELEMENTS
+    |--------------------------------------------------------------------------
+    */
+
+    const mpesaSection =
+        document.getElementById("mpesa-section");
+
+    const stkSection =
+        document.getElementById("stk-section");
+
+    const directTillSection =
+        document.getElementById("direct-till-section");
+
+    const mpesaPhoneInput =
+        document.getElementById("mpesa-phone");
+
+    const mpesaTransactionInput =
+        document.getElementById("mpesa-transaction-code");
 
 
     /*
@@ -526,9 +548,7 @@ document.addEventListener("DOMContentLoaded", function () {
         const subtotal =
             getCartTotal();
 
-
         const discount = 0;
-
 
         const total =
             subtotal - discount;
@@ -565,7 +585,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
     /*
     |--------------------------------------------------------------------------
-    | UPDATE PAYMENT DISPLAY
+    | UPDATE CHANGE
     |--------------------------------------------------------------------------
     */
 
@@ -612,15 +632,6 @@ document.addEventListener("DOMContentLoaded", function () {
 
         } else {
 
-            /*
-            |--------------------------------------------------------------------------
-            | Partial payment / credit
-            |--------------------------------------------------------------------------
-            |
-            | Do not display a negative change.
-            |
-            */
-
             changeElement.textContent =
                 "0.00";
 
@@ -651,6 +662,141 @@ document.addEventListener("DOMContentLoaded", function () {
 
     /*
     |--------------------------------------------------------------------------
+    | MPESA DISPLAY
+    |--------------------------------------------------------------------------
+    */
+
+    function updateMpesaDisplay() {
+
+        const paymentInput =
+            document.querySelector(
+                'input[name="payment"]:checked'
+            );
+
+
+        if (!paymentInput) {
+
+            return;
+
+        }
+
+
+        const paymentMethod =
+            paymentInput.value;
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | NON-MPESA
+        |--------------------------------------------------------------------------
+        */
+
+        if (
+            paymentMethod !==
+            "Lipa na M-Pesa"
+        ) {
+
+            if (mpesaSection) {
+
+                mpesaSection.style.display =
+                    "none";
+
+            }
+
+
+            return;
+
+        }
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | SHOW MPESA
+        |--------------------------------------------------------------------------
+        */
+
+        if (mpesaSection) {
+
+            mpesaSection.style.display =
+                "block";
+
+        }
+
+
+        const mpesaModeInput =
+            document.querySelector(
+                'input[name="mpesa_mode"]:checked'
+            );
+
+
+        const mpesaMode =
+            mpesaModeInput
+                ? mpesaModeInput.value
+                : "STK_PUSH";
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | STK PUSH
+        |--------------------------------------------------------------------------
+        */
+
+        if (
+            mpesaMode ===
+            "STK_PUSH"
+        ) {
+
+            if (stkSection) {
+
+                stkSection.style.display =
+                    "block";
+
+            }
+
+
+            if (directTillSection) {
+
+                directTillSection.style.display =
+                    "none";
+
+            }
+
+        }
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | DIRECT TILL
+        |--------------------------------------------------------------------------
+        */
+
+        if (
+            mpesaMode ===
+            "DIRECT_TILL"
+        ) {
+
+            if (stkSection) {
+
+                stkSection.style.display =
+                    "none";
+
+            }
+
+
+            if (directTillSection) {
+
+                directTillSection.style.display =
+                    "block";
+
+            }
+
+        }
+
+    }
+
+
+    /*
+    |--------------------------------------------------------------------------
     | PAYMENT METHOD CHANGE
     |--------------------------------------------------------------------------
     */
@@ -665,22 +811,33 @@ document.addEventListener("DOMContentLoaded", function () {
                 "change",
                 function () {
 
-                    /*
-                    |--------------------------------------------------------------------------
-                    | IMPORTANT
-                    |--------------------------------------------------------------------------
-                    | DO NOT CLEAR AMOUNT FOR CREDIT.
-                    |
-                    | Credit can now be:
-                    |
-                    | 0 paid
-                    | 100 paid
-                    | 150 paid
-                    | etc.
-                    |
-                    */
+                    updateMpesaDisplay();
 
                     updateChange();
+
+                }
+            );
+
+        });
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | MPESA MODE CHANGE
+    |--------------------------------------------------------------------------
+    */
+
+    document
+        .querySelectorAll(
+            'input[name="mpesa_mode"]'
+        )
+        .forEach(function (radio) {
+
+            radio.addEventListener(
+                "change",
+                function () {
+
+                    updateMpesaDisplay();
 
                 }
             );
@@ -798,15 +955,154 @@ document.addEventListener("DOMContentLoaded", function () {
 
                 /*
                 |--------------------------------------------------------------------------
+                | MPESA DATA
+                |--------------------------------------------------------------------------
+                */
+
+                let mpesaPhone = null;
+
+                let mpesaTransactionCode = null;
+
+                let mpesaPaymentMode = null;
+
+
+                if (
+                    paymentMethod ===
+                    "Lipa na M-Pesa"
+                ) {
+
+                    const mpesaModeInput =
+                        document.querySelector(
+                            'input[name="mpesa_mode"]:checked'
+                        );
+
+
+                    if (!mpesaModeInput) {
+
+                        alert(
+                            "Please select an M-Pesa payment method."
+                        );
+
+                        return;
+
+                    }
+
+
+                    mpesaPaymentMode =
+                        mpesaModeInput.value;
+
+
+                    /*
+                    |--------------------------------------------------------------------------
+                    | STK PUSH
+                    |--------------------------------------------------------------------------
+                    */
+
+                    if (
+                        mpesaPaymentMode ===
+                        "STK_PUSH"
+                    ) {
+
+                        mpesaPhone =
+                            mpesaPhoneInput
+                                ? mpesaPhoneInput.value.trim()
+                                : "";
+
+
+                        if (!mpesaPhone) {
+
+                            alert(
+                                "Please enter the customer's M-Pesa number."
+                            );
+
+                            mpesaPhoneInput?.focus();
+
+                            return;
+
+                        }
+
+
+                        const phonePattern =
+                            /^(?:07|01)\d{8}$|^\+254\d{9}$|^254\d{9}$/;
+
+
+                        if (
+                            !phonePattern.test(
+                                mpesaPhone
+                            )
+                        ) {
+
+                            alert(
+                                "Please enter a valid Kenyan M-Pesa number."
+                            );
+
+                            mpesaPhoneInput?.focus();
+
+                            return;
+
+                        }
+
+                    }
+
+
+                    /*
+                    |--------------------------------------------------------------------------
+                    | DIRECT TILL
+                    |--------------------------------------------------------------------------
+                    */
+
+                    if (
+                        mpesaPaymentMode ===
+                        "DIRECT_TILL"
+                    ) {
+
+                        mpesaTransactionCode =
+                            mpesaTransactionInput
+                                ? mpesaTransactionInput.value
+                                    .trim()
+                                    .toUpperCase()
+                                : "";
+
+
+                        if (!mpesaTransactionCode) {
+
+                            alert(
+                                "Please enter the M-Pesa transaction code."
+                            );
+
+                            mpesaTransactionInput?.focus();
+
+                            return;
+
+                        }
+
+
+                        if (
+                            mpesaTransactionCode.length < 6
+                        ) {
+
+                            alert(
+                                "Please enter a valid M-Pesa transaction code."
+                            );
+
+                            mpesaTransactionInput?.focus();
+
+                            return;
+
+                        }
+
+                    }
+
+                }
+
+
+                /*
+                |--------------------------------------------------------------------------
                 | CREDIT VALIDATION
                 |--------------------------------------------------------------------------
                 */
 
                 if (isCredit) {
-
-                    /*
-                    | Credit requires customer.
-                    */
 
                     if (!customerId) {
 
@@ -818,16 +1114,6 @@ document.addEventListener("DOMContentLoaded", function () {
 
                     }
 
-
-                    /*
-                    | Partial credit is allowed.
-                    |
-                    | Example:
-                    |
-                    | Total = 160
-                    | Paid  = 100
-                    | Credit = 60
-                    */
 
                     if (amountPaid > total) {
 
@@ -864,17 +1150,6 @@ document.addEventListener("DOMContentLoaded", function () {
                 |--------------------------------------------------------------------------
                 | SALE DATA
                 |--------------------------------------------------------------------------
-                |
-                | CRITICAL FIX:
-                |
-                | We now ALWAYS send the actual amountPaid.
-                |
-                | Previously:
-                |
-                | amount_paid: isCredit ? 0 : amountPaid
-                |
-                | That was forcing every credit sale to KSh 0.
-                |
                 */
 
                 const saleData = {
@@ -892,6 +1167,15 @@ document.addEventListener("DOMContentLoaded", function () {
 
                     amount_paid:
                         amountPaid,
+
+                    mpesa_phone:
+                        mpesaPhone,
+
+                    mpesa_transaction_code:
+                        mpesaTransactionCode,
+
+                    mpesa_payment_mode:
+                        mpesaPaymentMode,
 
                     cart:
                         cart.map(function (item) {
@@ -927,7 +1211,6 @@ document.addEventListener("DOMContentLoaded", function () {
 
                 completeSaleButton.disabled =
                     true;
-
 
                 completeSaleButton.textContent =
                     "PROCESSING...";
@@ -988,7 +1271,6 @@ document.addEventListener("DOMContentLoaded", function () {
                             jsonError
                         );
 
-
                         alert(
                             "Server returned an invalid response:\n\n" +
                             responseText
@@ -1019,7 +1301,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
                     /*
                     |--------------------------------------------------------------------------
-                    | SUCCESS - OPEN RECEIPT
+                    | SUCCESS
                     |--------------------------------------------------------------------------
                     */
 
@@ -1057,7 +1339,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
                     /*
                     |--------------------------------------------------------------------------
-                    | CLEAR AMOUNT
+                    | CLEAR INPUTS
                     |--------------------------------------------------------------------------
                     */
 
@@ -1068,11 +1350,19 @@ document.addEventListener("DOMContentLoaded", function () {
                     }
 
 
-                    /*
-                    |--------------------------------------------------------------------------
-                    | RESET CUSTOMER
-                    |--------------------------------------------------------------------------
-                    */
+                    if (mpesaPhoneInput) {
+
+                        mpesaPhoneInput.value = "";
+
+                    }
+
+
+                    if (mpesaTransactionInput) {
+
+                        mpesaTransactionInput.value = "";
+
+                    }
+
 
                     if (customerSelect) {
 
@@ -1080,12 +1370,6 @@ document.addEventListener("DOMContentLoaded", function () {
 
                     }
 
-
-                    /*
-                    |--------------------------------------------------------------------------
-                    | RESET CHANGE
-                    |--------------------------------------------------------------------------
-                    */
 
                     if (changeElement) {
 
@@ -1104,17 +1388,14 @@ document.addEventListener("DOMContentLoaded", function () {
 
 
                     alert(
-
                         "Unable to connect to the sale processor.\n\n" +
                         error.message
-
                     );
 
                 } finally {
 
                     completeSaleButton.disabled =
                         false;
-
 
                     completeSaleButton.textContent =
                         "COMPLETE SALE";
@@ -1136,6 +1417,8 @@ document.addEventListener("DOMContentLoaded", function () {
     renderCart();
 
     updateChange();
+
+    updateMpesaDisplay();
 
 
     console.log(

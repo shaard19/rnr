@@ -35,10 +35,28 @@ $sql = "
     LEFT JOIN suppliers s
         ON s.id = p.supplier_id
 
-    ORDER BY p.quantity ASC, p.product_name ASC
+    ORDER BY
+        p.quantity ASC,
+        p.product_name ASC
 ";
 
+
 $result = mysqli_query($conn, $sql);
+
+
+/*
+|--------------------------------------------------------------------------
+| Query Error Handling
+|--------------------------------------------------------------------------
+*/
+
+if (!$result) {
+
+    die(
+        "Stock Report Error: " .
+        htmlspecialchars(mysqli_error($conn))
+    );
+}
 
 
 /*
@@ -52,33 +70,52 @@ $total_units = 0;
 $low_stock = 0;
 $out_of_stock = 0;
 
-if ($result) {
 
-    while ($row = mysqli_fetch_assoc($result)) {
+while ($row = mysqli_fetch_assoc($result)) {
 
-        $total_products++;
+    $total_products++;
 
-        $quantity = (int)$row['quantity'];
+    $quantity = (int) $row['quantity'];
 
-        $total_units += $quantity;
+    $total_units += $quantity;
 
-        if ($quantity <= 5 && $quantity > 0) {
-            $low_stock++;
-        }
 
-        if ($quantity <= 0) {
-            $out_of_stock++;
-        }
+    if ($quantity <= 5 && $quantity > 0) {
+
+        $low_stock++;
+
     }
 
-    /*
-    Re-run query because the first loop consumed it.
-    */
 
-    $result = mysqli_query($conn, $sql);
+    if ($quantity <= 0) {
+
+        $out_of_stock++;
+
+    }
+
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| Re-run Query For Table
+|--------------------------------------------------------------------------
+*/
+
+$result = mysqli_query($conn, $sql);
+
+
+if (!$result) {
+
+    die(
+        "Unable to reload Stock Report: " .
+        htmlspecialchars(mysqli_error($conn))
+    );
+
 }
 
 ?>
+
 
 <!DOCTYPE html>
 
@@ -97,10 +134,12 @@ if ($result) {
 Stock Report - R&R Collection
 </title>
 
+
 <link
     rel="stylesheet"
     href="../../assets/css/style.css"
 >
+
 
 <link
     rel="stylesheet"
@@ -252,17 +291,36 @@ Stock Report - R&R Collection
 
 <div class="section-header">
 
-    <div>
 
-        <h2>
-            Inventory Status
-        </h2>
+<div>
 
-        <p>
-            Current stock position
-        </p>
+    <h2>
+        Inventory Status
+    </h2>
 
-    </div>
+    <p>
+        Current stock position
+    </p>
+
+</div>
+
+
+<!-- =====================================================
+     EXCEL EXPORT
+====================================================== -->
+
+<div>
+
+<a
+    href="export_stock_excel.php"
+    target="_blank"
+    class="btn btn-success"
+>
+    📊 Export Excel
+</a>
+
+</div>
+
 
 </div>
 

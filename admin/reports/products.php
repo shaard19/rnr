@@ -11,10 +11,9 @@ if (!hasPermission('view_reports')) {
     die("Access Denied");
 }
 
-
 /*
 |--------------------------------------------------------------------------
-| Date filters
+| Date Filters
 |--------------------------------------------------------------------------
 */
 
@@ -24,25 +23,20 @@ $to   = $_GET['to'] ?? date('Y-m-d');
 
 /*
 |--------------------------------------------------------------------------
-| Product sales report
+| Product Sales Report
 |--------------------------------------------------------------------------
 |
-| sale_items contains:
-| sale_id
-| product_id
-| quantity
-| price
-| subtotal
+| IMPORTANT:
+| The sales table uses payment_status:
+| Paid / Partial / Credit
 |
-| sales contains:
-| sale_date
-| status
-|
+| Product sales should include ALL valid sales.
+| Therefore, we do not filter by payment_status.
+|--------------------------------------------------------------------------
 */
 
 $sql = "
     SELECT
-
         p.product_name,
 
         COALESCE(SUM(si.quantity), 0) AS quantity_sold,
@@ -62,8 +56,6 @@ $sql = "
     WHERE
         DATE(s.sale_date) BETWEEN '$from' AND '$to'
 
-        AND s.status = 'Completed'
-
     GROUP BY
         p.id,
         p.product_name
@@ -78,7 +70,22 @@ $result = mysqli_query($conn, $sql);
 
 /*
 |--------------------------------------------------------------------------
-| Overall totals
+| Query Error Handling
+|--------------------------------------------------------------------------
+*/
+
+if (!$result) {
+
+    die(
+        "Product Sales Report Error: " .
+        htmlspecialchars(mysqli_error($conn))
+    );
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| Calculate Summary Totals
 |--------------------------------------------------------------------------
 */
 
@@ -86,24 +93,34 @@ $total_quantity = 0;
 $total_revenue = 0;
 $total_transactions = 0;
 
-if ($result) {
+while ($row = mysqli_fetch_assoc($result)) {
 
-    while ($row = mysqli_fetch_assoc($result)) {
+    $total_quantity += (float) $row['quantity_sold'];
 
-        $total_quantity += (float)$row['quantity_sold'];
+    $total_revenue += (float) $row['revenue'];
 
-        $total_revenue += (float)$row['revenue'];
-
-        $total_transactions += (int)$row['transactions'];
-
-    }
-
-    /*
-    Re-run query because the first loop consumed it.
-    */
-
-    $result = mysqli_query($conn, $sql);
+    $total_transactions += (int) $row['transactions'];
 }
+
+
+/*
+|--------------------------------------------------------------------------
+| Re-run Query For Table
+|--------------------------------------------------------------------------
+*/
+
+$result = mysqli_query($conn, $sql);
+
+if (!$result) {
+
+    die(
+        "Unable to reload Product Sales Report: " .
+        htmlspecialchars(mysqli_error($conn))
+    );
+}
+
+
+$products_sold = mysqli_num_rows($result);
 
 ?>
 
@@ -125,10 +142,12 @@ if ($result) {
 Product Sales Report - R&R Collection
 </title>
 
+
 <link
     rel="stylesheet"
     href="../../assets/css/style.css"
 >
+
 
 <link
     rel="stylesheet"
@@ -192,6 +211,7 @@ From
     type="date"
     name="from"
     value="<?= htmlspecialchars($from); ?>"
+    required
 >
 
 </div>
@@ -207,18 +227,19 @@ To
     type="date"
     name="to"
     value="<?= htmlspecialchars($to); ?>"
+    required
 >
 
 </div>
 
 
 <button type="submit">
-Generate Report
+    Generate Report
 </button>
 
 
 <a href="products.php">
-Reset
+    Reset
 </a>
 
 
@@ -229,7 +250,7 @@ Reset
 
 
 <!-- =====================================================
-     SUMMARY
+     SUMMARY CARDS
 ====================================================== -->
 
 <div class="report-cards">
@@ -314,7 +335,7 @@ Products Sold
 </span>
 
 <h2>
-<?= $result ? mysqli_num_rows($result) : 0; ?>
+<?= number_format($products_sold); ?>
 </h2>
 
 </div>
@@ -327,13 +348,14 @@ Products Sold
 
 
 <!-- =====================================================
-     PRODUCT TABLE
+     PRODUCT PERFORMANCE
 ====================================================== -->
 
 <div class="recent-sales">
 
 
 <div class="section-header">
+
 
 <div>
 
@@ -353,9 +375,31 @@ Product Performance
 
 </div>
 
+
+<!-- =====================================================
+     EXCEL EXPORT BUTTON
+====================================================== -->
+
+<div>
+
+<a
+    href="export_products_excel.php?from=<?= urlencode($from); ?>&to=<?= urlencode($to); ?>"
+    target="_blank"
+    class="btn btn-success"
+>
+    📊 Export Excel
+</a>
+
 </div>
 
 
+</div>
+
+
+
+<!-- =====================================================
+     PRODUCT TABLE
+====================================================== -->
 
 <div class="table-wrapper">
 
@@ -505,3 +549,4 @@ No product sales found for the selected period.
 </body>
 
 </html>
+```

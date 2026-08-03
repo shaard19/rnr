@@ -14,41 +14,152 @@ if (!hasPermission('view_reports')) {
 
 /*
 |--------------------------------------------------------------------------
+| Date Filters
+|--------------------------------------------------------------------------
+*/
+
+$from = $_GET['from'] ?? date('Y-m-d');
+$to   = $_GET['to'] ?? date('Y-m-d');
+
+
+/*
+|--------------------------------------------------------------------------
+| Validate Dates
+|--------------------------------------------------------------------------
+*/
+
+$from_check = DateTime::createFromFormat('Y-m-d', $from);
+$to_check   = DateTime::createFromFormat('Y-m-d', $to);
+
+if (
+    !$from_check ||
+    !$to_check ||
+    $from_check->format('Y-m-d') !== $from ||
+    $to_check->format('Y-m-d') !== $to
+) {
+
+    $from = date('Y-m-d');
+    $to   = date('Y-m-d');
+
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| Correct Reversed Dates
+|--------------------------------------------------------------------------
+*/
+
+if ($from > $to) {
+
+    $temp = $from;
+    $from = $to;
+    $to = $temp;
+
+}
+
+
+/*
+|--------------------------------------------------------------------------
 | Customer Credit Report
+|--------------------------------------------------------------------------
+|
+| Period purchases and payments:
+|     sales.sale_date
+|
+| Current outstanding:
+|     customers.credit_balance
+|
+| We DO NOT use:
+|     s.status
+|
+| because the actual sales table does not contain
+| a status column.
 |--------------------------------------------------------------------------
 */
 
 $sql = "
+
     SELECT
 
         c.id,
         c.customer_name,
+        c.credit_balance,
 
         COUNT(s.id) AS transactions,
 
-        COALESCE(SUM(s.total), 0) AS total_purchases,
+        COALESCE(
+            SUM(s.total),
+            0
+        ) AS total_purchases,
 
-        COALESCE(SUM(s.amount_paid), 0) AS total_paid,
-
-        COALESCE(SUM(s.balance), 0) AS outstanding
+        COALESCE(
+            SUM(s.amount_paid),
+            0
+        ) AS total_paid
 
     FROM customers c
 
-    INNER JOIN sales s
+    LEFT JOIN sales s
+
         ON s.customer_id = c.id
 
-    WHERE s.status = 'Completed'
+        AND DATE(s.sale_date)
+            BETWEEN ? AND ?
+
+    WHERE
+        c.status = 'Active'
 
     GROUP BY
+
         c.id,
-        c.customer_name
+        c.customer_name,
+        c.credit_balance
+
+    HAVING
+
+        transactions > 0
+        OR c.credit_balance > 0
 
     ORDER BY
-        outstanding DESC,
+
+        c.credit_balance DESC,
         c.customer_name ASC
 ";
 
-$result = mysqli_query($conn, $sql);
+
+$stmt = mysqli_prepare($conn, $sql);
+
+
+if (!$stmt) {
+
+    die(
+        "Customer Credit Report Error: " .
+        htmlspecialchars(mysqli_error($conn))
+    );
+
+}
+
+
+mysqli_stmt_bind_param(
+    $stmt,
+    "ss",
+    $from,
+    $to
+);
+
+
+if (!mysqli_stmt_execute($stmt)) {
+
+    die(
+        "Unable to generate Customer Credit Report: " .
+        htmlspecialchars(mysqli_stmt_error($stmt))
+    );
+
+}
+
+
+$result = mysqli_stmt_get_result($stmt);
 
 
 /*
@@ -62,23 +173,64 @@ $total_purchases = 0;
 $total_paid = 0;
 $total_outstanding = 0;
 
-if ($result) {
 
-    while ($row = mysqli_fetch_assoc($result)) {
+while ($row = mysqli_fetch_assoc($result)) {
 
-        $total_customers++;
+    $total_customers++;
 
-        $total_purchases += (float)$row['total_purchases'];
+    $total_purchases +=
+        (float) $row['total_purchases'];
 
-        $total_paid += (float)$row['total_paid'];
+    $total_paid +=
+        (float) $row['total_paid'];
 
-        $total_outstanding += (float)$row['outstanding'];
+    $total_outstanding +=
+        (float) $row['credit_balance'];
 
-    }
-
-    // Re-run query because the first loop consumed it
-    $result = mysqli_query($conn, $sql);
 }
+
+
+/*
+|--------------------------------------------------------------------------
+| Re-run Query For Table
+|--------------------------------------------------------------------------
+*/
+
+mysqli_stmt_close($stmt);
+
+
+$stmt = mysqli_prepare($conn, $sql);
+
+
+if (!$stmt) {
+
+    die(
+        "Unable to reload Customer Credit Report: " .
+        htmlspecialchars(mysqli_error($conn))
+    );
+
+}
+
+
+mysqli_stmt_bind_param(
+    $stmt,
+    "ss",
+    $from,
+    $to
+);
+
+
+if (!mysqli_stmt_execute($stmt)) {
+
+    die(
+        "Unable to reload Customer Credit Report: " .
+        htmlspecialchars(mysqli_stmt_error($stmt))
+    );
+
+}
+
+
+$result = mysqli_stmt_get_result($stmt);
 
 ?>
 
@@ -99,10 +251,12 @@ if ($result) {
 Customer Credit Report - R&R Collection
 </title>
 
+
 <link
     rel="stylesheet"
     href="../../assets/css/style.css"
 >
+
 
 <link
     rel="stylesheet"
@@ -148,6 +302,63 @@ Customer Credit Report - R&R Collection
 
 
 <!-- =====================================================
+     DATE FILTER
+====================================================== -->
+
+<div class="report-filter">
+
+<form method="GET">
+
+
+<div>
+
+<label>
+From
+</label>
+
+<input
+    type="date"
+    name="from"
+    value="<?= htmlspecialchars($from); ?>"
+    required
+>
+
+</div>
+
+
+<div>
+
+<label>
+To
+</label>
+
+<input
+    type="date"
+    name="to"
+    value="<?= htmlspecialchars($to); ?>"
+    required
+>
+
+</div>
+
+
+<button type="submit">
+    Generate Report
+</button>
+
+
+<a href="customers.php">
+    Reset
+</a>
+
+
+</form>
+
+</div>
+
+
+
+<!-- =====================================================
      SUMMARY
 ====================================================== -->
 
@@ -185,14 +396,16 @@ Customer Credit Report - R&R Collection
     <div>
 
         <span>
-            Total Purchases
+            Period Purchases
         </span>
 
         <h2>
+
             KSh <?= number_format(
                 $total_purchases,
                 2
             ); ?>
+
         </h2>
 
     </div>
@@ -210,14 +423,16 @@ Customer Credit Report - R&R Collection
     <div>
 
         <span>
-            Total Paid
+            Amount Paid
         </span>
 
         <h2>
+
             KSh <?= number_format(
                 $total_paid,
                 2
             ); ?>
+
         </h2>
 
     </div>
@@ -235,14 +450,16 @@ Customer Credit Report - R&R Collection
     <div>
 
         <span>
-            Outstanding Credit
+            Current Outstanding
         </span>
 
         <h2>
+
             KSh <?= number_format(
                 $total_outstanding,
                 2
             ); ?>
+
         </h2>
 
     </div>
@@ -263,17 +480,49 @@ Customer Credit Report - R&R Collection
 
 <div class="section-header">
 
-    <div>
 
-        <h2>
-            Customer Accounts
-        </h2>
+<div>
 
-        <p>
-            Customers with recorded sales
-        </p>
+    <h2>
+        Customer Accounts
+    </h2>
 
-    </div>
+    <p>
+
+        <?= htmlspecialchars($from); ?>
+
+        &nbsp;to&nbsp;
+
+        <?= htmlspecialchars($to); ?>
+
+        &nbsp;|&nbsp;
+
+        Current credit balances
+
+    </p>
+
+</div>
+
+
+
+<!-- =====================================================
+     EXCEL EXPORT
+====================================================== -->
+
+<div>
+
+<a
+    href="export_credit_excel.php?from=<?= urlencode($from); ?>&to=<?= urlencode($to); ?>"
+    target="_blank"
+    class="btn btn-success"
+>
+
+    📊 Export Excel
+
+</a>
+
+</div>
+
 
 </div>
 
@@ -298,7 +547,7 @@ Transactions
 </th>
 
 <th>
-Total Purchases
+Period Purchases
 </th>
 
 <th>
@@ -325,6 +574,14 @@ Status
 
 
 <?php while ($row = mysqli_fetch_assoc($result)): ?>
+
+
+<?php
+
+$current_balance =
+    (float) $row['credit_balance'];
+
+?>
 
 
 <tr>
@@ -377,7 +634,7 @@ KSh <?= number_format(
 <strong>
 
 KSh <?= number_format(
-    $row['outstanding'],
+    $current_balance,
     2
 ); ?>
 
@@ -389,7 +646,7 @@ KSh <?= number_format(
 <td>
 
 
-<?php if ($row['outstanding'] > 0): ?>
+<?php if ($current_balance > 0): ?>
 
 <span class="balance-warning">
     CREDIT DUE
@@ -423,7 +680,7 @@ KSh <?= number_format(
     class="empty-state"
 >
 
-No customer sales found.
+No customer credit records found.
 
 </td>
 
@@ -451,3 +708,12 @@ No customer sales found.
 </body>
 
 </html>
+
+
+<?php
+
+if (isset($stmt)) {
+    mysqli_stmt_close($stmt);
+}
+
+?>
