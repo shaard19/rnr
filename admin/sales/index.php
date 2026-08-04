@@ -85,7 +85,6 @@ $products = mysqli_query(
     FROM products
     WHERE status = 'Active'
     ORDER BY product_name ASC
-    LIMIT 20
     "
 );
 
